@@ -336,25 +336,25 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
             })}
             {hasOtherMulti && (
               <div className="space-y-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const hasOtherSelected = selectedOthers.length > 0;
-                      if (hasOtherSelected) {
-                        handleChange(currentArray.filter((v: any) => typeof v === "string" && otherMultiOptions.includes(v)));
-                      } else {
-                        handleChange([...currentArray, "Other"]);
-                      }
-                    }}
-                    className={cn(
-                      "w-full h-14 rounded-full border-2 text-left px-5 text-base font-medium transition-all duration-200",
-                      selectedOthers.length > 0
-                        ? "border-bluewell-light bg-bluewell-light text-white shadow-sm"
-                        : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-bluewell-light hover:bg-neutral-bg"
-                    )}
-                  >
-                    Other
-                  </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const hasOtherSelected = selectedOthers.length > 0;
+                    if (hasOtherSelected) {
+                      handleChange(currentArray.filter((v: any) => typeof v === "string" && otherMultiOptions.includes(v)));
+                    } else {
+                      handleChange([...currentArray, "Other"]);
+                    }
+                  }}
+                  className={cn(
+                    "w-full h-14 rounded-full border-2 text-left px-5 text-base font-medium transition-all duration-200",
+                    selectedOthers.length > 0
+                      ? "border-bluewell-light bg-bluewell-light text-white shadow-sm"
+                      : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-bluewell-light hover:bg-neutral-bg"
+                  )}
+                >
+                  Other
+                </button>
                 {selectedOthers.length > 0 && (
                   <input
                     type="text"
