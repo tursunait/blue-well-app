@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { href: "/home", label: "home", icon: Home },
   { href: "/planner", label: "planner", icon: Calendar },
-  { href: "/chat", label: "chat", icon: MessageCircle },
+  { href: "/ai", label: "ai", icon: MessageCircle },
   { href: "/profile", label: "profile", icon: User },
 ];
 

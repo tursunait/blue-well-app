@@ -6,7 +6,9 @@ from datetime import datetime, timedelta
 class LLMProvider:
     """Abstract LLM provider - returns deterministic sample data in dev"""
 
-    def generate(self, message: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def generate(
+        self, message: str, context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """Generate response based on message"""
         message_lower = message.lower()
 
@@ -46,7 +48,9 @@ class LLMProvider:
         """Generate daily recommendation suggestions"""
         now = datetime.now()
         morning = (now.replace(hour=7, minute=0, second=0, microsecond=0)).isoformat()
-        afternoon = (now.replace(hour=14, minute=0, second=0, microsecond=0)).isoformat()
+        afternoon = (
+            now.replace(hour=14, minute=0, second=0, microsecond=0)
+        ).isoformat()
         evening = (now.replace(hour=18, minute=0, second=0, microsecond=0)).isoformat()
 
         return [
@@ -58,7 +62,9 @@ class LLMProvider:
                 "cta": "Add to Calendar",
                 "payload": {
                     "startISO": morning,
-                    "endISO": (datetime.fromisoformat(morning) + timedelta(minutes=30)).isoformat(),
+                    "endISO": (
+                        datetime.fromisoformat(morning) + timedelta(minutes=30)
+                    ).isoformat(),
                 },
             },
             {
@@ -80,7 +86,9 @@ class LLMProvider:
                 "cta": "Reserve Spot",
                 "payload": {
                     "startISO": evening,
-                    "endISO": (datetime.fromisoformat(evening) + timedelta(hours=1)).isoformat(),
+                    "endISO": (
+                        datetime.fromisoformat(evening) + timedelta(hours=1)
+                    ).isoformat(),
                     "location": "Downtown Studio",
                 },
             },
@@ -104,7 +112,9 @@ class LLMProvider:
                 "cta": "Add to Calendar",
                 "payload": {
                     "startISO": start,
-                    "endISO": (datetime.fromisoformat(start) + timedelta(minutes=45)).isoformat(),
+                    "endISO": (
+                        datetime.fromisoformat(start) + timedelta(minutes=45)
+                    ).isoformat(),
                 },
             },
         ]
@@ -123,7 +133,9 @@ class LLMProvider:
                 "cta": "Reserve Spot",
                 "payload": {
                     "startISO": start,
-                    "endISO": (datetime.fromisoformat(start) + timedelta(minutes=60)).isoformat(),
+                    "endISO": (
+                        datetime.fromisoformat(start) + timedelta(minutes=60)
+                    ).isoformat(),
                     "location": "Fitness Center",
                 },
             },
@@ -144,4 +156,3 @@ class LLMProvider:
                 },
             },
         ]
-

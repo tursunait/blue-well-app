@@ -9,6 +9,7 @@ import {
   Timeline,
   TimelineEvent,
 } from "@halo/ui";
+import { AIChatbot } from "@/components/ai-chatbot";
 
 // BlueWell Home - Your Day, Optimized
 export default function HomePage() {
@@ -81,6 +82,9 @@ export default function HomePage() {
         {/* AI Recommendations Section */}
         <div className="space-y-4">
           <h2 className="text-lg font-semibold text-neutral-dark">AI Recommendations</h2>
+
+          {/* AI Chatbot */}
+          <AIChatbot />
 
           {/* MyRec Class Recommendation */}
           <MyRecClassCard
