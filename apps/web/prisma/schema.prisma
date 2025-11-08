@@ -20,6 +20,9 @@ model User {
   integrations Integration?
   surveyAnswers SurveyAnswer[]
   mealLogs     MealLog[]
+  chatHistory  ChatMessage[]
+  dailyPlans   DailyPlan[]
+  workoutLogs  WorkoutLog[]
 }
 
 model Profile {
@@ -90,5 +93,44 @@ model ClassSlot {
   rawJson   Json?
   createdAt DateTime @default(now())
   @@index([start])
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String   // "user" | "assistant"
+  content   String
+  metadata  Json?    // Store suggestions, context, etc.
+  createdAt DateTime @default(now())
+  @@index([userId, createdAt])
+}
+
+model DailyPlan {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date        DateTime @db.Date
+  planJson    Json     // { workouts: [], meals: [], classes: [] }
+  isSaved     Boolean  @default(false)
+  emailSent   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+model WorkoutLog {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  type        String?  // "cardio", "strength", "yoga", etc.
+  duration    Int      // minutes
+  caloriesBurned Int?
+  notes       String?
+  date        DateTime @db.Date
+  createdAt   DateTime @default(now())
+  @@index([userId, date])
 }
 

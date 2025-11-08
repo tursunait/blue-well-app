@@ -1,26 +1,56 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { ChatBubble, Button } from "@halo/ui";
-import { chatRequest, addCalendarEvent } from "@/lib/api";
+import {
+  chatRequest,
+  addCalendarEvent,
+  saveDailyPlan,
+  emailDailyPlan,
+  logWorkout,
+} from "@/lib/api";
 import { ChatMessage, Suggestion } from "@halo/types";
 
-// BlueWell Chat - Soft bubbles, big action cards, minimal text
+// BlueWell Chat - Enhanced with context, memory, and personalized recommendations
 export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
+  const [currentPlanData, setCurrentPlanData] = useState<Record<string, any> | null>(null);
+
+  // Fetch user profile for personalization
+  const { data: userProfile } = useQuery({
+    queryKey: ["userProfile"],
+    queryFn: async () => {
+      const response = await fetch("/api/profile");
+      if (!response.ok) return null;
+      return response.json();
+    },
+  });
 
   const sendMessage = useMutation({
     mutationFn: async (message: string) => {
-      const response = await chatRequest(message);
+      // Get last 5 messages for conversation history
+      const conversationHistory = messages
+        .slice(-5)
+        .map((msg) => ({
+          role: msg.role,
+          content: msg.content,
+        }));
+
+      const response = await chatRequest(
+        message,
+        undefined,
+        conversationHistory,
+        userProfile || undefined
+      );
       return response;
     },
-    onSuccess: (data) => {
+    onSuccess: (data, message) => {
       const userMessage: ChatMessage = {
         id: Date.now().toString(),
         role: "user",
-        content: input,
+        content: message,
         timestamp: new Date().toISOString(),
       };
       const aiMessage: ChatMessage = {
@@ -31,6 +61,12 @@ export default function ChatPage() {
         timestamp: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, userMessage, aiMessage]);
+
+      // Store plan data if present
+      if (data.planData) {
+        setCurrentPlanData(data.planData);
+      }
+
       setInput("");
     },
   });
@@ -38,7 +74,32 @@ export default function ChatPage() {
   const handleSuggestionAction = async (suggestion: Suggestion) => {
     if (suggestion.kind === "class" && suggestion.payload) {
       console.log("Reserve class:", suggestion);
-    } else if (suggestion.kind === "workout" || suggestion.kind === "meal") {
+      // In production, integrate with MyRec reservation API
+    } else if (suggestion.kind === "workout") {
+      if (suggestion.payload?.startISO && suggestion.payload?.endISO) {
+        try {
+          await addCalendarEvent({
+            title: suggestion.title,
+            startISO: suggestion.payload.startISO,
+            endISO: suggestion.payload.endISO,
+            location: suggestion.payload.location,
+            notes: suggestion.desc,
+          });
+          // Also log as workout if it has duration
+          if (suggestion.payload.duration) {
+            await logWorkout({
+              title: suggestion.title,
+              type: suggestion.payload.type || "cardio",
+              duration: suggestion.payload.duration,
+              caloriesBurned: suggestion.payload.caloriesBurned,
+              date: new Date(suggestion.payload.startISO).toISOString().split("T")[0],
+            });
+          }
+        } catch (error) {
+          console.error("Failed to add to calendar:", error);
+        }
+      }
+    } else if (suggestion.kind === "meal") {
       if (suggestion.payload?.startISO && suggestion.payload?.endISO) {
         try {
           await addCalendarEvent({
@@ -54,6 +115,40 @@ export default function ChatPage() {
       }
     }
   };
+
+  const handleSavePlan = useMutation({
+    mutationFn: async () => {
+      if (!currentPlanData) throw new Error("No plan to save");
+      const today = new Date().toISOString().split("T")[0];
+      return saveDailyPlan(today, currentPlanData);
+    },
+    onSuccess: () => {
+      const successMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: "Your daily plan has been saved!",
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, successMessage]);
+    },
+  });
+
+  const handleEmailPlan = useMutation({
+    mutationFn: async () => {
+      if (!currentPlanData) throw new Error("No plan to email");
+      const today = new Date().toISOString().split("T")[0];
+      return emailDailyPlan(today, currentPlanData);
+    },
+    onSuccess: () => {
+      const successMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: "Your daily plan has been emailed to you!",
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, successMessage]);
+    },
+  });
 
   const quickReplies = ["suggest a workout", "find a class", "meal ideas", "daily plan"];
 
@@ -104,6 +199,28 @@ export default function ChatPage() {
           </div>
         )}
       </div>
+
+      {/* Plan Actions - Show when plan data is available */}
+      {currentPlanData && (
+        <div className="border-t border-neutral-border bg-neutral-white px-6 py-3 flex gap-3">
+          <Button
+            onClick={() => handleSavePlan.mutate()}
+            disabled={handleSavePlan.isPending}
+            variant="outline"
+            size="sm"
+          >
+            {handleSavePlan.isPending ? "Saving..." : "Save my plan"}
+          </Button>
+          <Button
+            onClick={() => handleEmailPlan.mutate()}
+            disabled={handleEmailPlan.isPending}
+            variant="outline"
+            size="sm"
+          >
+            {handleEmailPlan.isPending ? "Sending..." : "Email me my plan"}
+          </Button>
+        </div>
+      )}
 
       {/* Input - Big, clear */}
       <div className="border-t border-neutral-border bg-neutral-white px-6 py-4">
