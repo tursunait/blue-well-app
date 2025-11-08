@@ -1,20 +1,46 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FitnessGoalCard, AutoDetectedMeal } from "@halo/ui";
 import { Camera } from "lucide-react";
 
 // BlueWell Log Meal - Fitness Goals + Auto-Detected Meal
 export default function LogPage() {
-  // Fitness Goals Data
-  const caloriesConsumed = 2000;
-  const caloriesGoal = 1800;
+  const [stats, setStats] = useState<{
+    calories: { consumed: number; goal: number; remaining: number; burned: number };
+    protein: { consumed: number; goal: number; remaining: number };
+    steps: { current: number; goal: number; remaining: number };
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadStats();
+  }, []);
+
+  const loadStats = async () => {
+    try {
+      const res = await fetch("/api/stats/today");
+      if (res.ok) {
+        const data = await res.json();
+        setStats(data);
+      }
+    } catch (error) {
+      console.error("Error loading stats:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fitness Goals Data - use real data or defaults
+  const caloriesConsumed = stats?.calories.consumed || 0;
+  const caloriesGoal = stats?.calories.goal || 2000;
+  const caloriesRemaining = stats?.calories.remaining || caloriesGoal;
   
-  const stepsCurrent = 8500;
-  const stepsGoal = 10000;
+  const stepsCurrent = stats?.steps.current || 0;
+  const stepsGoal = stats?.steps.goal || 10000;
   
-  const proteinCurrent = 60;
-  const proteinGoal = 120;
+  const proteinCurrent = stats?.protein.consumed || 0;
+  const proteinGoal = stats?.protein.goal || 120;
 
   // Auto-Detected Meal Data
   const [detectedMeal, setDetectedMeal] = useState<{
@@ -33,9 +59,30 @@ export default function LogPage() {
     imageUrl: "/img/poke-bowl.jpg", // Placeholder - you can add actual image
   });
 
-  const handleConfirm = () => {
-    console.log("Meal confirmed:", detectedMeal);
-    // Add logic to save meal to database
+  const handleConfirm = async () => {
+    if (!detectedMeal) return;
+    
+    try {
+      const res = await fetch("/api/log/meal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          itemName: detectedMeal.name,
+          calories: detectedMeal.calories,
+          proteinG: detectedMeal.protein,
+          carbsG: detectedMeal.carbs,
+          fatG: detectedMeal.fat,
+          source: "PHOTO_AI",
+        }),
+      });
+      
+      if (res.ok) {
+        setDetectedMeal(null);
+        loadStats(); // Refresh stats
+      }
+    } catch (error) {
+      console.error("Error confirming meal:", error);
+    }
   };
 
   const handleEdit = () => {
@@ -67,7 +114,7 @@ export default function LogPage() {
           <div className="grid grid-cols-3 gap-3">
             <FitnessGoalCard
               type="calories"
-              current={caloriesConsumed}
+              current={caloriesRemaining}
               goal={caloriesGoal}
               title="Calories Remaining"
             />
@@ -75,8 +122,8 @@ export default function LogPage() {
               type="steps"
               current={stepsCurrent}
               goal={stepsGoal}
-              title="Lose Weight"
-              subtitle="Steps:"
+              title="Steps Today"
+              subtitle=""
             />
             <FitnessGoalCard
               type="protein"
