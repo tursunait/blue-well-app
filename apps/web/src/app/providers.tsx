@@ -4,6 +4,7 @@ import { SessionProvider, useSession } from "next-auth/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { signIn } from "next-auth/react";
+import { NutritionProvider } from "@/contexts/nutrition-context";
 
 // Auto-sign-in component for dev mode
 function AutoSignIn({ children }: { children: React.ReactNode }) {
@@ -28,7 +29,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider>
       <AutoSignIn>
-        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        <QueryClientProvider client={queryClient}>
+          <NutritionProvider>{children}</NutritionProvider>
+        </QueryClientProvider>
       </AutoSignIn>
     </SessionProvider>
   );

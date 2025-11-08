@@ -1,4 +1,5 @@
 const FASTAPI_BASE_URL = process.env.NEXT_PUBLIC_FASTAPI_BASE_URL || "http://localhost:8000";
+const CALORIE_ESTIMATOR_BASE_URL = process.env.NEXT_PUBLIC_CALORIE_ESTIMATOR_URL || "http://localhost:8000";
 
 export async function chatRequest(
   message: string,
@@ -22,14 +23,81 @@ export async function chatRequest(
   return response.json();
 }
 
-export async function estimateCalories(imageFile: File) {
+// Response types for calorie estimation
+export interface NutritionInfo {
+  calories: number;
+  protein_g: number;
+  carbohydrates_g: number;
+  fat_g: number;
+  fiber_g: number;
+  sugar_g: number;
+  sodium_mg: number;
+}
+
+export interface CalorieEstimateItem {
+  dish_name: string;
+  estimated_calories: number;
+  nutrition: NutritionInfo;
+  confidence: number;
+  rationale: string;
+}
+
+export interface CalorieEstimateResponse {
+  items: CalorieEstimateItem[];
+  total_calories: number;
+  model_used: string;
+  images_processed: number;
+}
+
+export async function estimateCalories(
+  imageFiles: File[],
+  hint?: string,
+  plateDiameterCm?: number
+): Promise<CalorieEstimateResponse> {
   const formData = new FormData();
-  formData.append("file", imageFile);
-  const response = await fetch(`${FASTAPI_BASE_URL}/calorie/estimate`, {
+
+  // Append all images
+  imageFiles.forEach((file) => {
+    formData.append("images", file);
+  });
+
+  // Append optional parameters
+  if (hint) {
+    formData.append("hint", hint);
+  }
+  if (plateDiameterCm) {
+    formData.append("plate_diameter_cm", plateDiameterCm.toString());
+  }
+
+  const response = await fetch(`${CALORIE_ESTIMATOR_BASE_URL}/v1/estimate-calories`, {
     method: "POST",
     body: formData,
   });
-  if (!response.ok) throw new Error("Calorie estimation failed");
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || "Calorie estimation failed");
+  }
+
+  return response.json();
+}
+
+export async function estimateCaloriesFromText(
+  foodDescription: string
+): Promise<CalorieEstimateResponse> {
+  const formData = new FormData();
+  formData.append("food_description", foodDescription);
+
+  const response = await fetch(`${CALORIE_ESTIMATOR_BASE_URL}/v1/estimate-calories-text`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || "Calorie estimation failed");
+  }
+
   return response.json();
 }
 

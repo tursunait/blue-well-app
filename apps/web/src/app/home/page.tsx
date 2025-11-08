@@ -10,19 +10,15 @@ import {
   TimelineEvent,
 } from "@halo/ui";
 import { AIChatbot } from "@/components/ai-chatbot";
+import { useNutrition } from "@/contexts/nutrition-context";
 
 // BlueWell Home - Your Day, Optimized
 export default function HomePage() {
-  // Daily goals data
-  const caloriesConsumed = 800;
-  const caloriesGoal = 2000;
-  const caloriesRemaining = caloriesGoal - caloriesConsumed;
+  // Get nutrition data from context
+  const { caloriesConsumed, caloriesGoal, proteinConsumed, proteinGoal } = useNutrition();
 
   const stepsCurrent = 8000;
   const stepsGoal = 10000;
-
-  const proteinCurrent = 60;
-  const proteinGoal = 150;
 
   // MyRec class recommendation
   const [myRecClass, setMyRecClass] = useState({
@@ -63,7 +59,7 @@ export default function HomePage() {
             current={caloriesConsumed}
             goal={caloriesGoal}
             color="blue"
-            showRemaining={true}
+            showRemaining={false}
           />
           <DailyGoalProgress
             label="Steps"
@@ -73,7 +69,7 @@ export default function HomePage() {
           />
           <DailyGoalProgress
             label="Protein"
-            current={proteinCurrent}
+            current={proteinConsumed}
             goal={proteinGoal}
             color="purple"
           />
