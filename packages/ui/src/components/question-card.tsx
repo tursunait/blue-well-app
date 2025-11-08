@@ -66,6 +66,48 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
   // Weight state - only used when question.type === "weight"
   const [weightDisplayValue, setWeightDisplayValue] = React.useState<string>("");
 
+  // Compound question state - for managing field index in compound questions
+  const compoundValue = question.type === "compound" ? (value || {}) : {};
+  
+  // Helper function to calculate field index based on compound value
+  const calculateFieldIndex = React.useCallback(() => {
+    if (question.type === "compound") {
+      // Find first empty field or start at 0
+      // Logical order: Age -> Gender -> Food preferences -> Foods to avoid (optional) -> Height -> Weight
+      const fields = ["age", "gender", "foodPreferences", "foodsToAvoid", "height", "weight"];
+      const cv = value || {};
+      const firstEmpty = fields.findIndex((field) => {
+        if (field === "age") return !cv.age || cv.age < 13;
+        if (field === "gender") return !cv.gender;
+        if (field === "foodPreferences") return !cv.foodPreferences || cv.foodPreferences.length === 0;
+        // foodsToAvoid is optional - skip it if empty
+        if (field === "foodsToAvoid") return false; // Always skip this field in auto-navigation
+        if (field === "height") return !cv.heightCm || cv.heightCm < 50;
+        if (field === "weight") return !cv.weightKg || cv.weightKg < 1;
+        return true;
+      });
+      return firstEmpty >= 0 ? firstEmpty : 0;
+    }
+    return 0;
+  }, [question.type, value]);
+
+  // Initialize to 0
+  const [currentFieldIndex, setCurrentFieldIndex] = React.useState(0);
+  
+  // Track previous question ID to detect question changes
+  const prevQuestionIdRef = React.useRef<string | undefined>(undefined);
+
+  // Reset currentFieldIndex only when question changes (not when value changes)
+  // This prevents auto-advance when user is typing in the current field
+  React.useEffect(() => {
+    // On mount or when question changes, calculate the initial field index
+    if (prevQuestionIdRef.current !== question.id) {
+      const newIndex = calculateFieldIndex();
+      setCurrentFieldIndex(newIndex);
+      prevQuestionIdRef.current = question.id;
+    }
+  }, [question.type, question.id, calculateFieldIndex]);
+
   const isHeightMetric = units.heightUnit === "cm";
   const isWeightMetric = units.weightUnit === "kg";
 
@@ -409,21 +451,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
         );
       case "compound":
         // Compound form - fields appear one by one dynamically
-        const compoundValue = value || {};
-        const [currentFieldIndex, setCurrentFieldIndex] = React.useState(() => {
-          // Find first empty field or start at 0
-          const fields = ["height", "weight", "age", "gender", "foodPreferences", "foodsToAvoid"];
-          const firstEmpty = fields.findIndex((field) => {
-            if (field === "height") return !compoundValue.heightCm || compoundValue.heightCm < 50;
-            if (field === "weight") return !compoundValue.weightKg || compoundValue.weightKg < 1;
-            if (field === "age") return !compoundValue.age || compoundValue.age < 13;
-            if (field === "gender") return !compoundValue.gender;
-            if (field === "foodPreferences") return !compoundValue.foodPreferences || compoundValue.foodPreferences.length === 0;
-            if (field === "foodsToAvoid") return !compoundValue.foodsToAvoid || compoundValue.foodsToAvoid.trim() === "";
-            return true;
-          });
-          return firstEmpty >= 0 ? firstEmpty : 0;
-        });
+        // Note: compoundValue and currentFieldIndex are defined at component top level
 
         // Compute display values from stored canonical values
         const compoundHeightCm = compoundValue.heightCm || 0;
@@ -461,6 +489,14 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
             setCurrentFieldIndex(currentFieldIndex + 1);
           }
         };
+        
+        // Update max index check - we now have 6 fields (0-5)
+
+        const handleBackField = () => {
+          if (currentFieldIndex > 0) {
+            setCurrentFieldIndex(currentFieldIndex - 1);
+          }
+        };
 
         const handleSkipField = () => {
           handleNextField();
@@ -474,129 +510,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
         // Render current field based on index
         const renderCurrentField = () => {
           switch (currentFieldIndex) {
-            case 0: // Height
-              return (
-                <div className="space-y-3">
-                  <label className="text-sm font-medium text-neutral-dark">Height</label>
-                  <div className="flex items-center justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onUnitsChange?.({ ...units, heightUnit: units.heightUnit === "cm" ? "ft_in" : "cm" });
-                      }}
-                      className="text-sm text-accent-light hover:text-bluewell-royal font-medium"
-                    >
-                      switch to {units.heightUnit === "cm" ? "ft+in" : "cm"}
-                    </button>
-                  </div>
-                  {isHeightMetric ? (
-                    <input
-                      type="number"
-                      value={compoundHeightCm || ""}
-                      onChange={(e) => handleCompoundHeightMetricChange(Number(e.target.value))}
-                      min={50}
-                      max={250}
-                      className="w-full h-14 rounded-xl border-2 border-neutral-border bg-neutral-white px-5 text-base focus:border-accent-light focus:outline-none focus:ring-2 focus:ring-accent-light/20 transition-colors"
-                      placeholder="enter height in cm"
-                      autoFocus
-                    />
-                  ) : (
-                    <div className="flex gap-3">
-                      <div className="flex-1">
-                        <label className="block text-sm text-neutral-muted mb-2">feet</label>
-                        <input
-                          type="number"
-                          value={compoundHeightFeetInches.feet || ""}
-                          onChange={(e) => handleCompoundHeightImperialChange(Number(e.target.value), compoundHeightFeetInches.inches)}
-                          min={0}
-                          max={8}
-                          className="w-full h-14 rounded-xl border-2 border-neutral-border bg-neutral-white px-5 text-base focus:border-accent-light focus:outline-none focus:ring-2 focus:ring-accent-light/20 transition-colors"
-                          autoFocus
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <label className="block text-sm text-neutral-muted mb-2">inches</label>
-                        <input
-                          type="number"
-                          value={compoundHeightFeetInches.inches || ""}
-                          onChange={(e) => handleCompoundHeightImperialChange(compoundHeightFeetInches.feet, Number(e.target.value))}
-                          min={0}
-                          max={11}
-                          className="w-full h-14 rounded-xl border-2 border-neutral-border bg-neutral-white px-5 text-base focus:border-accent-light focus:outline-none focus:ring-2 focus:ring-accent-light/20 transition-colors"
-                        />
-                      </div>
-                    </div>
-                  )}
-                  <div className="flex gap-3 pt-2">
-                    <Button
-                      onClick={handleNextField}
-                      disabled={!compoundHeightCm || compoundHeightCm < 50}
-                      size="lg"
-                      className="flex-1 rounded-full bg-gradient-to-r from-bluewell-light to-bluewell-royal text-white hover:from-bluewell-royal hover:to-bluewell-navy shadow-md hover:shadow-lg transition-all duration-200 border-0"
-                    >
-                      Next
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      onClick={handleSkipField}
-                      size="lg"
-                      className="flex-1 rounded-full border border-neutral-border"
-                    >
-                      Skip
-                    </Button>
-                  </div>
-                </div>
-              );
-            case 1: // Weight
-              return (
-                <div className="space-y-3">
-                  <label className="text-sm font-medium text-neutral-dark">
-                    Weight
-                    <span className="text-xs text-neutral-muted font-normal ml-2">Helps tailor portions.</span>
-                  </label>
-                  <div className="flex items-center justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onUnitsChange?.({ ...units, weightUnit: units.weightUnit === "kg" ? "lb" : "kg" });
-                      }}
-                      className="text-sm text-accent-light hover:text-bluewell-royal font-medium"
-                    >
-                      switch to {units.weightUnit === "kg" ? "lbs" : "kg"}
-                    </button>
-                  </div>
-                  <input
-                    type="number"
-                    value={compoundWeightDisplay}
-                    onChange={(e) => handleCompoundWeightChange(e.target.value)}
-                    min={1}
-                    max={500}
-                    step="0.1"
-                    className="w-full h-14 rounded-xl border-2 border-neutral-border bg-neutral-white px-5 text-base focus:border-accent-light focus:outline-none focus:ring-2 focus:ring-accent-light/20 transition-colors"
-                    placeholder={`enter weight in ${units.weightUnit}`}
-                    autoFocus
-                  />
-                  <div className="flex gap-3 pt-2">
-                    <Button
-                      onClick={handleNextField}
-                      disabled={!compoundValue.weightKg || compoundValue.weightKg < 1}
-                      size="lg"
-                      className="flex-1 rounded-full bg-gradient-to-r from-bluewell-light to-bluewell-royal text-white hover:from-bluewell-royal hover:to-bluewell-navy shadow-md hover:shadow-lg transition-all duration-200 border-0"
-                    >
-                      Next
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      onClick={handleSkipField}
-                      size="lg"
-                      className="flex-1 rounded-full border border-neutral-border"
-                    >
-                      Skip
-                    </Button>
-                  </div>
-                </div>
-              );
-            case 2: // Age
+            case 0: // Age
               return (
                 <div className="space-y-3">
                   <label className="text-sm font-medium text-neutral-dark">Age</label>
@@ -612,14 +526,6 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
                   />
                   <div className="flex gap-3 pt-2">
                     <Button
-                      onClick={handleNextField}
-                      disabled={!compoundValue.age || compoundValue.age < 13}
-                      size="lg"
-                      className="flex-1 rounded-full bg-gradient-to-r from-bluewell-light to-bluewell-royal text-white hover:from-bluewell-royal hover:to-bluewell-navy shadow-md hover:shadow-lg transition-all duration-200 border-0"
-                    >
-                      Next
-                    </Button>
-                    <Button
                       variant="ghost"
                       onClick={handleSkipField}
                       size="lg"
@@ -627,10 +533,18 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
                     >
                       Skip
                     </Button>
+                    <Button
+                      onClick={handleNextField}
+                      disabled={!compoundValue.age || compoundValue.age < 13}
+                      size="lg"
+                      className="flex-1 rounded-full bg-gradient-to-r from-bluewell-light to-bluewell-royal text-white hover:from-bluewell-royal hover:to-bluewell-navy shadow-md hover:shadow-lg transition-all duration-200 border-0"
+                    >
+                      Next
+                    </Button>
                   </div>
                 </div>
               );
-            case 3: // Gender
+            case 1: // Gender
               return (
                 <div className="space-y-3">
                   <label className="text-sm font-medium text-neutral-dark">Gender</label>
@@ -661,16 +575,24 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
                   <div className="flex gap-3 pt-2">
                     <Button
                       variant="ghost"
+                      onClick={handleBackField}
+                      size="lg"
+                      className="flex-1 rounded-full border border-neutral-border"
+                    >
+                      Back
+                    </Button>
+                    <Button
+                      variant="ghost"
                       onClick={handleSkipField}
                       size="lg"
-                      className="w-full rounded-full border border-neutral-border"
+                      className="flex-1 rounded-full border border-neutral-border"
                     >
                       Skip
                     </Button>
                   </div>
                 </div>
               );
-            case 4: // Food preferences
+            case 2: // Food preferences
               return (
                 <div className="space-y-3">
                   <label className="text-sm font-medium text-neutral-dark">Food preferences</label>
@@ -735,11 +657,12 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
                   </div>
                   <div className="flex gap-3 pt-2">
                     <Button
-                      onClick={handleNextField}
+                      variant="ghost"
+                      onClick={handleBackField}
                       size="lg"
-                      className="flex-1 rounded-full bg-gradient-to-r from-bluewell-light to-bluewell-royal text-white hover:from-bluewell-royal hover:to-bluewell-navy shadow-md hover:shadow-lg transition-all duration-200 border-0"
+                      className="flex-1 rounded-full border border-neutral-border"
                     >
-                      Next
+                      Back
                     </Button>
                     <Button
                       variant="ghost"
@@ -749,13 +672,22 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
                     >
                       Skip
                     </Button>
+                    <Button
+                      onClick={handleNextField}
+                      size="lg"
+                      className="flex-1 rounded-full bg-gradient-to-r from-bluewell-light to-bluewell-royal text-white hover:from-bluewell-royal hover:to-bluewell-navy shadow-md hover:shadow-lg transition-all duration-200 border-0"
+                    >
+                      Next
+                    </Button>
                   </div>
                 </div>
               );
-            case 5: // Foods to avoid (last field)
+            case 3: // Foods to avoid
               return (
                 <div className="space-y-3">
-                  <label className="text-sm font-medium text-neutral-dark">Foods to avoid</label>
+                  <label className="text-sm font-medium text-neutral-dark">
+                    Foods to avoid <span className="text-neutral-muted font-normal">(optional)</span>
+                  </label>
                   <input
                     type="text"
                     value={compoundValue.foodsToAvoid || ""}
@@ -767,9 +699,154 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
                   <div className="flex gap-3 pt-2">
                     <Button
                       variant="ghost"
+                      onClick={handleBackField}
+                      size="lg"
+                      className="flex-1 rounded-full border border-neutral-border"
+                    >
+                      Back
+                    </Button>
+                    <Button
+                      variant="ghost"
                       onClick={handleSkipField}
                       size="lg"
-                      className="w-full rounded-full border border-neutral-border"
+                      className="flex-1 rounded-full border border-neutral-border"
+                    >
+                      Skip
+                    </Button>
+                    <Button
+                      onClick={handleNextField}
+                      size="lg"
+                      className="flex-1 rounded-full bg-gradient-to-r from-bluewell-light to-bluewell-royal text-white hover:from-bluewell-royal hover:to-bluewell-navy shadow-md hover:shadow-lg transition-all duration-200 border-0"
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              );
+            case 4: // Height
+              return (
+                <div className="space-y-3">
+                  <label className="text-sm font-medium text-neutral-dark">Height</label>
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onUnitsChange?.({ ...units, heightUnit: units.heightUnit === "cm" ? "ft_in" : "cm" });
+                      }}
+                      className="text-sm text-accent-light hover:text-bluewell-royal font-medium"
+                    >
+                      switch to {units.heightUnit === "cm" ? "ft+in" : "cm"}
+                    </button>
+                  </div>
+                  {isHeightMetric ? (
+                    <input
+                      type="number"
+                      value={compoundHeightCm || ""}
+                      onChange={(e) => handleCompoundHeightMetricChange(Number(e.target.value))}
+                      min={50}
+                      max={250}
+                      className="w-full h-14 rounded-xl border-2 border-neutral-border bg-neutral-white px-5 text-base focus:border-accent-light focus:outline-none focus:ring-2 focus:ring-accent-light/20 transition-colors"
+                      placeholder="enter height in cm"
+                      autoFocus
+                    />
+                  ) : (
+                    <div className="flex gap-3">
+                      <div className="flex-1">
+                        <label className="block text-sm text-neutral-muted mb-2">feet</label>
+                        <input
+                          type="number"
+                          value={compoundHeightFeetInches.feet || ""}
+                          onChange={(e) => handleCompoundHeightImperialChange(Number(e.target.value), compoundHeightFeetInches.inches)}
+                          min={0}
+                          max={8}
+                          className="w-full h-14 rounded-xl border-2 border-neutral-border bg-neutral-white px-5 text-base focus:border-accent-light focus:outline-none focus:ring-2 focus:ring-accent-light/20 transition-colors"
+                          autoFocus
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-sm text-neutral-muted mb-2">inches</label>
+                        <input
+                          type="number"
+                          value={compoundHeightFeetInches.inches || ""}
+                          onChange={(e) => handleCompoundHeightImperialChange(compoundHeightFeetInches.feet, Number(e.target.value))}
+                          min={0}
+                          max={11}
+                          className="w-full h-14 rounded-xl border-2 border-neutral-border bg-neutral-white px-5 text-base focus:border-accent-light focus:outline-none focus:ring-2 focus:ring-accent-light/20 transition-colors"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex gap-3 pt-2">
+                    <Button
+                      variant="ghost"
+                      onClick={handleBackField}
+                      size="lg"
+                      className="flex-1 rounded-full border border-neutral-border"
+                    >
+                      Back
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={handleSkipField}
+                      size="lg"
+                      className="flex-1 rounded-full border border-neutral-border"
+                    >
+                      Skip
+                    </Button>
+                    <Button
+                      onClick={handleNextField}
+                      disabled={!compoundHeightCm || compoundHeightCm < 50}
+                      size="lg"
+                      className="flex-1 rounded-full bg-gradient-to-r from-bluewell-light to-bluewell-royal text-white hover:from-bluewell-royal hover:to-bluewell-navy shadow-md hover:shadow-lg transition-all duration-200 border-0"
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              );
+            case 5: // Weight (last field)
+              return (
+                <div className="space-y-3">
+                  <label className="text-sm font-medium text-neutral-dark">
+                    Weight
+                    <span className="text-xs text-neutral-muted font-normal ml-2">Helps tailor portions.</span>
+                  </label>
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onUnitsChange?.({ ...units, weightUnit: units.weightUnit === "kg" ? "lb" : "kg" });
+                      }}
+                      className="text-sm text-accent-light hover:text-bluewell-royal font-medium"
+                    >
+                      switch to {units.weightUnit === "kg" ? "lbs" : "kg"}
+                    </button>
+                  </div>
+                  <input
+                    type="number"
+                    value={compoundWeightDisplay}
+                    onChange={(e) => handleCompoundWeightChange(e.target.value)}
+                    min={1}
+                    max={500}
+                    step="0.1"
+                    className="w-full h-14 rounded-xl border-2 border-neutral-border bg-neutral-white px-5 text-base focus:border-accent-light focus:outline-none focus:ring-2 focus:ring-accent-light/20 transition-colors"
+                    placeholder={`enter weight in ${units.weightUnit}`}
+                    autoFocus
+                  />
+                  <div className="flex gap-3 pt-2">
+                    <Button
+                      variant="ghost"
+                      onClick={handleBackField}
+                      size="lg"
+                      className="flex-1 rounded-full border border-neutral-border"
+                    >
+                      Back
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={handleSkipField}
+                      size="lg"
+                      className="flex-1 rounded-full border border-neutral-border"
                     >
                       Skip
                     </Button>
@@ -800,11 +877,13 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
         
         // Preferred times (multi-select)
         const preferredTimes = Array.isArray(fitnessValue.preferredTimes) ? fitnessValue.preferredTimes : [];
-        const timeOptions = ["Morning", "Afternoon"];
+        const timeOptions = ["Morning", "Afternoon", "Evening"];
         
         // Sports & Classes (multi-select)
         const sportsClasses = Array.isArray(fitnessValue.sportsClasses) ? fitnessValue.sportsClasses : [];
         const sportsOptions = ["Yoga", "HIIT", "Running", "Swimming", "Cycling", "Pilates"];
+        const sportsOtherOptions = sportsOptions.filter((opt) => opt !== "Other");
+        const selectedSportsOthers = sportsClasses.filter((v: any) => typeof v === "string" && !sportsOptions.includes(v));
 
         return (
           <div className="space-y-8">
@@ -864,7 +943,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
             <div className="space-y-4">
               <label className="text-base font-semibold text-neutral-dark">Sports & Classes</label>
               <div className="grid grid-cols-2 gap-3">
-                {sportsOptions.map((sport) => {
+                {sportsOtherOptions.map((sport) => {
                   const isSelected = sportsClasses.includes(sport);
                   return (
                     <button
@@ -887,7 +966,39 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
                     </button>
                   );
                 })}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const hasOtherSelected = selectedSportsOthers.length > 0;
+                    if (hasOtherSelected) {
+                      handleFitnessChange("sportsClasses", sportsClasses.filter((s: string) => sportsOptions.includes(s)));
+                    } else {
+                      handleFitnessChange("sportsClasses", [...sportsClasses, "Other"]);
+                    }
+                  }}
+                  className={cn(
+                    "h-12 rounded-full border-2 text-sm font-medium transition-all duration-200",
+                    selectedSportsOthers.length > 0
+                      ? "border-bluewell-light bg-gradient-to-r from-bluewell-light to-green-400 text-white shadow-sm"
+                      : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-bluewell-light"
+                  )}
+                >
+                  Other
+                </button>
               </div>
+              {selectedSportsOthers.length > 0 && (
+                <input
+                  type="text"
+                  value={selectedSportsOthers[0] || ""}
+                  onChange={(e) => {
+                    const withoutOther = sportsClasses.filter((s: string) => sportsOptions.includes(s));
+                    handleFitnessChange("sportsClasses", [...withoutOther, e.target.value]);
+                  }}
+                  className="w-full h-14 rounded-xl border-2 border-neutral-border bg-neutral-white px-5 text-base focus:border-accent-light focus:outline-none focus:ring-2 focus:ring-accent-light/20 transition-colors"
+                  placeholder="please specify..."
+                  autoFocus
+                />
+              )}
             </div>
           </div>
         );
@@ -899,14 +1010,14 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
   const hasValue = value !== null && value !== undefined && (typeof value === "number" || value !== "");
   const hasArrayValue = Array.isArray(value) && value.length > 0;
   // For compound questions, check that at least one field has a meaningful value
-  const hasCompoundValue = question.type === "compound" && value && typeof value === "object" && Object.keys(value).length > 0 && Object.values(value).some((v: any, idx: number) => {
+  const hasCompoundValue = question.type === "compound" && value && typeof value === "object" && Object.keys(value).length > 0 && Object.entries(value).some(([key, v]: [string, any]) => {
     if (v === null || v === undefined || v === "") return false;
     // For heightCm, check it's a realistic height (at least 50cm)
-    if (Object.keys(value)[idx] === "heightCm" && typeof v === "number") return v >= 50;
+    if (key === "heightCm" && typeof v === "number") return v >= 50;
     // For weightKg, check it's a realistic weight (at least 1kg)
-    if (Object.keys(value)[idx] === "weightKg" && typeof v === "number") return v >= 1;
+    if (key === "weightKg" && typeof v === "number") return v >= 1;
     // For age, check it's a realistic age (at least 13)
-    if (Object.keys(value)[idx] === "age" && typeof v === "number") return v >= 13;
+    if (key === "age" && typeof v === "number") return v >= 13;
     // For numbers, check they're > 0 (not just default/empty)
     if (typeof v === "number") return v > 0;
     // For arrays, check they have items

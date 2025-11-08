@@ -15,7 +15,7 @@ interface SurveyQuestionExtended extends SurveyQuestion {
 }
 
 const BLUEWELL_SURVEY: SurveyQuestionExtended[] = [
-  // 1. First
+  // 1. Personal details - Start with basic info
   {
     id: "1",
     type: "compound",
@@ -23,9 +23,34 @@ const BLUEWELL_SURVEY: SurveyQuestionExtended[] = [
     optional: false, // Question is required, but individual fields are optional
     helperText: "We'll use this to personalize your wellness plan. Fill in whatever you're comfortable sharing.",
   },
-  // 2. Schedule consistency
+  // 2. Primary wellness goal - Understand their motivation first
   {
     id: "2",
+    type: "multi",
+    text: "What is your primary wellness goal?",
+    options: ["Lose weight", "Build muscle", "Improve endurance", "Maintain current shape", "Reduce stress", "Improve overall fitness", "Not sure yet"],
+    helperText: "This helps us personalize your plan.",
+    // Required - not optional
+  },
+  // 3. Current activity level - Know where they're starting from
+  {
+    id: "3",
+    type: "select",
+    text: "How active are you in a typical week?",
+    options: ["Rarely", "1–2 days", "3–4 days", "5+ days"],
+    helperText: "By 'active' we mean any physical activity that gets your heart rate up—like walking, running, workouts, sports, or even taking the stairs. Starting where you are is perfect.",
+  },
+  // 4. Fitness preferences - What activities they enjoy
+  {
+    id: "4",
+    type: "fitness-preferences",
+    text: "Fitness Preferences",
+    helperText: "Tell us about your workout preferences.",
+    optional: true,
+  },
+  // 5. Schedule consistency - Understand their routine
+  {
+    id: "5",
     type: "slider",
     text: "How consistent is your daily schedule?",
     min: 1,
@@ -33,17 +58,17 @@ const BLUEWELL_SURVEY: SurveyQuestionExtended[] = [
     sliderLabels: ["Very inconsistent", "Somewhat inconsistent", "Neutral", "Mostly consistent", "Very consistent"],
     helperText: "This helps us suggest activities that fit your routine.",
   },
-  // 3. Available personal time
+  // 6. Available personal time - How much time they have
   {
-    id: "3",
+    id: "6",
     type: "select",
-    text: "How much time do you realistically have for workout each day?",
+    text: "How much time do you realistically have for yourself each day?",
     options: ["<10 min", "10–20 min", "20–40 min", "40+ min"],
     helperText: "We'll tailor suggestions to fit your schedule.",
   },
-  // 4. Meal regularity
+  // 7. Meal regularity - Eating patterns
   {
-    id: "4",
+    id: "7",
     type: "slider",
     text: "How regular are your meals on most days?",
     min: 1,
@@ -51,9 +76,9 @@ const BLUEWELL_SURVEY: SurveyQuestionExtended[] = [
     sliderLabels: ["Very irregular", "Somewhat irregular", "Neutral", "Mostly regular", "Very regular"],
     helperText: "No judgment—we're just getting to know your patterns.",
   },
-  // 5. Monthly grocery/eat out budget
+  // 8. Monthly grocery/eat out budget - Meal planning budget
   {
-    id: "5",
+    id: "8",
     type: "slider",
     text: "Monthly Grocery / Eat Out Budget",
     min: 1,
@@ -62,32 +87,7 @@ const BLUEWELL_SURVEY: SurveyQuestionExtended[] = [
     helperText: "This helps us suggest meal plans that fit your budget.",
     optional: true,
   },
-  // 6. Weekly activity
-  {
-    id: "6",
-    type: "select",
-    text: "How active are you in a typical week?",
-    options: ["Rarely", "1–2 days", "3–4 days", "5+ days"],
-    helperText: "By 'active' we mean any physical activity that gets your heart rate up—like walking, running, workouts, sports, or even taking the stairs. Starting where you are is perfect.",
-  },
-  // 7. Fitness preferences (comprehensive)
-  {
-    id: "7",
-    type: "fitness-preferences",
-    text: "Fitness Preferences",
-    helperText: "Tell us about your workout preferences.",
-    optional: true,
-  },
-  // 8. Fitness goal (required)
-  {
-    id: "8",
-    type: "select",
-    text: "What is your primary wellness goal?",
-    options: ["Lose weight", "Build muscle", "Improve endurance", "Maintain current shape", "Reduce stress", "Improve overall fitness", "Not sure yet"],
-    helperText: "This helps us personalize your plan.",
-    // Required - not optional
-  },
-  // 9. Barriers (max 3 selections)
+  // 9. Barriers - What gets in the way
   {
     id: "9",
     type: "multi",
@@ -96,7 +96,7 @@ const BLUEWELL_SURVEY: SurveyQuestionExtended[] = [
     maxSelections: 3,
     helperText: "Select up to 3. We'll help you work around these.",
   },
-  // 10. Support preference
+  // 10. Support preference - How we can help (end with action)
   {
     id: "10",
     type: "multi",
@@ -165,9 +165,10 @@ export default function OnboardingPage() {
     }
   }, [currentIndex]);
 
-  const validIndex = Math.max(0, Math.min(currentIndex, BLUEWELL_SURVEY.length - 1));
-  const currentQuestion = BLUEWELL_SURVEY[validIndex];
-  const currentAnswer = currentQuestion ? answers[currentQuestion.id] : undefined;
+  // Calculate valid index and current question - memoize to avoid recalculation
+  const validIndex = useMemo(() => Math.max(0, Math.min(currentIndex, BLUEWELL_SURVEY.length - 1)), [currentIndex]);
+  const currentQuestion = useMemo(() => BLUEWELL_SURVEY[validIndex], [validIndex]);
+  const currentAnswer = useMemo(() => currentQuestion ? answers[currentQuestion.id] : undefined, [currentQuestion, answers]);
 
   // Auto-initialize slider questions with default value
   useEffect(() => {
@@ -189,7 +190,7 @@ export default function OnboardingPage() {
         return prev;
       });
     }
-  }, [validIndex, currentQuestion?.id, currentQuestion?.type]);
+  }, [currentQuestion]);
 
   // Calculate progress
   const progress = validIndex + 1;
