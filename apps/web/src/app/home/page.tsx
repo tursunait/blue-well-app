@@ -7,7 +7,6 @@ import {
   MealPlanCard,
   MealDeliveryCard,
   Timeline,
-  NavigationBar,
   TimelineEvent,
 } from "@halo/ui";
 
@@ -127,9 +126,6 @@ export default function HomePage() {
         {/* Timeline - Next 6 hours */}
         <Timeline events={timelineEvents} />
       </div>
-
-      {/* Navigation Bar */}
-      <NavigationBar />
     </div>
   );
 }

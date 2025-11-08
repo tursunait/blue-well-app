@@ -14,5 +14,7 @@ export * from "./src/components/meal-plan-card";
 export * from "./src/components/meal-delivery-card";
 export * from "./src/components/timeline";
 export * from "./src/components/navigation-bar";
+export * from "./src/components/fitness-goal-card";
+export * from "./src/components/auto-detected-meal";
 export * from "./src/lib/utils";
 

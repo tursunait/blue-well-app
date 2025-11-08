@@ -15,13 +15,13 @@ interface SurveyQuestionExtended extends SurveyQuestion {
 }
 
 const BLUEWELL_SURVEY: SurveyQuestionExtended[] = [
-  // 1. Optional details (compound form) - First, but fields are optional
+  // 1. First
   {
     id: "1",
     type: "compound",
-    text: "Optional details to tailor your plan",
-    optional: true, // Question can be skipped, but individual fields are optional
-    helperText: "Share only what you're comfortable with. You can skip this step.",
+    text: "Tell us about yourself",
+    optional: false, // Question is required, but individual fields are optional
+    helperText: "We'll use this to personalize your wellness plan. Fill in whatever you're comfortable sharing.",
   },
   // 2. Schedule consistency
   {
@@ -37,7 +37,7 @@ const BLUEWELL_SURVEY: SurveyQuestionExtended[] = [
   {
     id: "3",
     type: "select",
-    text: "How much time do you realistically have for yourself each day?",
+    text: "How much time do you realistically have for workout each day?",
     options: ["<10 min", "10–20 min", "20–40 min", "40+ min"],
     helperText: "We'll tailor suggestions to fit your schedule.",
   },
@@ -58,7 +58,7 @@ const BLUEWELL_SURVEY: SurveyQuestionExtended[] = [
     text: "Monthly Grocery / Eat Out Budget",
     min: 1,
     max: 4,
-    sliderLabels: ["$150", "$200", "$500", "$500+"],
+    sliderLabels: ["$50", "$100","$150","$200", "$300+"],
     helperText: "This helps us suggest meal plans that fit your budget.",
     optional: true,
   },
@@ -68,7 +68,7 @@ const BLUEWELL_SURVEY: SurveyQuestionExtended[] = [
     type: "select",
     text: "How active are you in a typical week?",
     options: ["Rarely", "1–2 days", "3–4 days", "5+ days"],
-    helperText: "Starting where you are is perfect.",
+    helperText: "By 'active' we mean any physical activity that gets your heart rate up—like walking, running, workouts, sports, or even taking the stairs. Starting where you are is perfect.",
   },
   // 7. Fitness preferences (comprehensive)
   {
