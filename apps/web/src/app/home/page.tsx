@@ -1,91 +1,130 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { MetricCard, RecommendationCard } from "@halo/ui";
-import { chatRequest } from "@/lib/api";
-import { RecommendationCard as RecommendationCardType } from "@halo/types";
+import { useState } from "react";
+import {
+  DailyGoalProgress,
+  MyRecClassCard,
+  MealPlanCard,
+  MealDeliveryCard,
+  Timeline,
+  TimelineEvent,
+} from "@halo/ui";
 
-// BlueWell Home - Calm, minimal, one primary action, max 5 elements above fold
+// BlueWell Home - Your Day, Optimized
 export default function HomePage() {
-  const { data: recommendations, isLoading } = useQuery({
-    queryKey: ["daily-recommendations"],
-    queryFn: async () => {
-      const response = await chatRequest("daily plan");
-      return response.suggestions || [];
-    },
+  // Daily goals data
+  const caloriesConsumed = 800;
+  const caloriesGoal = 2000;
+  const caloriesRemaining = caloriesGoal - caloriesConsumed;
+
+  const stepsCurrent = 8000;
+  const stepsGoal = 10000;
+
+  const proteinCurrent = 60;
+  const proteinGoal = 150;
+
+  // MyRec class recommendation
+  const [myRecClass, setMyRecClass] = useState({
+    title: "Full Body Strength",
+    time: "5:30 PM",
   });
 
-  // Get greeting based on time
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return "good morning";
-    if (hour < 18) return "good afternoon";
-    return "good evening";
-  };
+  // Meal plan options
+  const mealOptions = ["Mediterranean Bowl", "Grilled Chicken Salad", "Quinoa Power Bowl"];
+  const [selectedMeal, setSelectedMeal] = useState<string | undefined>();
+
+  // Meal delivery recommendation
+  const [mealDelivery, setMealDelivery] = useState({
+    restaurant: "Yoprea",
+    meal: "Mediterranean Bowl",
+    service: "Grubhub" as "Grubhub" | "Uber Eats" | "DoorDash",
+  });
+
+  // Timeline events for next 6 hours
+  const timelineEvents: TimelineEvent[] = [
+    { id: "1", label: "Workout", time: "6:00 PM", color: "green" },
+    { id: "2", label: "Meal", time: "7:30 PM", color: "blue" },
+    { id: "3", label: "Yoga Class", time: "8:15 PM", color: "purple" },
+  ];
 
   return (
     <div className="min-h-screen bg-neutral-bg pb-24">
-      <div className="mx-auto max-w-2xl space-y-8 p-6">
-        {/* Greeting - Calm, friendly */}
-        <div className="pt-8 space-y-2">
-          <h1 className="text-3xl font-semibold text-neutral-dark">
-            {getGreeting()}
-          </h1>
-          <p className="text-base text-neutral-text">
-            here's your wellness snapshot
-          </p>
+      <div className="mx-auto max-w-2xl space-y-6 p-6">
+        {/* Header */}
+        <div className="pt-8 text-center">
+          <h1 className="text-3xl font-semibold text-neutral-dark">Your Day, Optimized</h1>
         </div>
 
-        {/* Today's Snapshot - 3 metrics max */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <MetricCard label="calories" value={1240} unit="kcal" trend="neutral" />
-          <MetricCard label="water" value={6} unit="glasses" trend="up" />
-          <MetricCard label="sleep" value={7.5} unit="hours" trend="neutral" />
+        {/* Daily Progress Goals - 3 circular indicators */}
+        <div className="grid grid-cols-3 gap-4">
+          <DailyGoalProgress
+            label="Calories"
+            current={caloriesConsumed}
+            goal={caloriesGoal}
+            color="blue"
+            showRemaining={true}
+          />
+          <DailyGoalProgress
+            label="Steps"
+            current={stepsCurrent}
+            goal={stepsGoal}
+            color="green"
+          />
+          <DailyGoalProgress
+            label="Protein"
+            current={proteinCurrent}
+            goal={proteinGoal}
+            color="purple"
+          />
         </div>
 
-        {/* Primary Action - Next suggestion */}
-        {recommendations && recommendations.length > 0 && (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <h2 className="text-xl font-semibold text-neutral-dark">
-                do this next
-              </h2>
-              <p className="text-sm text-neutral-muted">
-                one thing to focus on right now
-              </p>
-            </div>
-            <RecommendationCard
-              recommendation={recommendations[0] as RecommendationCardType}
-              onAccept={() => console.log("Accepted")}
-              onSkip={() => console.log("Skipped")}
-            />
-          </div>
-        )}
+        {/* AI Recommendations Section */}
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold text-neutral-dark">AI Recommendations</h2>
 
-        {/* Simplified 6-hour timeline - Only if there are more recommendations */}
-        {recommendations && recommendations.length > 1 && (
-          <div className="space-y-4 pt-4">
-            <h2 className="text-xl font-semibold text-neutral-dark">
-              today's plan
-            </h2>
-            <div className="space-y-3">
-              {recommendations.slice(1, 4).map((rec: RecommendationCardType, idx: number) => (
-                <RecommendationCard
-                  key={rec.id || idx}
-                  recommendation={rec}
-                  onAccept={() => console.log("Accepted", rec)}
-                  onSkip={() => console.log("Skipped", rec)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
+          {/* MyRec Class Recommendation */}
+          <MyRecClassCard
+            classTitle={myRecClass.title}
+            time={myRecClass.time}
+            onAccept={() => {
+              console.log("Accepted MyRec class");
+              // Add logic to register for class
+            }}
+            onSkip={() => {
+              console.log("Skipped MyRec class");
+            }}
+          />
 
-        {isLoading && (
-          <div className="text-center py-12 text-neutral-muted">
-            loading your recommendations...
-          </div>
-        )}
+          {/* Meal Plan Recommendation with Dropdown */}
+          <MealPlanCard
+            mealOptions={mealOptions}
+            selectedMeal={selectedMeal}
+            onSelectMeal={(meal) => {
+              setSelectedMeal(meal);
+              console.log("Selected meal:", meal);
+            }}
+            onSkip={() => {
+              console.log("Skipped meal plan");
+            }}
+          />
+
+          {/* Meal Delivery Recommendation */}
+          <MealDeliveryCard
+            restaurantName={mealDelivery.restaurant}
+            mealName={mealDelivery.meal}
+            deliveryService={mealDelivery.service}
+            onAccept={() => {
+              console.log("Accepted meal delivery");
+              // Add logic to open delivery app
+            }}
+            onSkip={() => {
+              console.log("Skipped meal delivery");
+            }}
+          />
+        </div>
+
+        {/* Timeline - Next 6 hours */}
+        <Timeline events={timelineEvents} />
       </div>
     </div>
   );

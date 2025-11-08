@@ -7,5 +7,14 @@ export * from "./src/components/chat-bubble";
 export * from "./src/components/action-card";
 export * from "./src/components/question-card";
 export * from "./src/components/progress-bar";
+export * from "./src/components/circular-progress";
+export * from "./src/components/daily-goal-progress";
+export * from "./src/components/myrec-class-card";
+export * from "./src/components/meal-plan-card";
+export * from "./src/components/meal-delivery-card";
+export * from "./src/components/timeline";
+export * from "./src/components/navigation-bar";
+export * from "./src/components/fitness-goal-card";
+export * from "./src/components/auto-detected-meal";
 export * from "./src/lib/utils";
 

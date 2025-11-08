@@ -2,8 +2,9 @@
 
 import { Button } from "@halo/ui";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
-// BlueWell Welcome - Calm, minimal, one clear action
+// BlueWell Welcome - Personalized, warm, inviting
 export default function WelcomePage() {
   const router = useRouter();
 
@@ -14,26 +15,43 @@ export default function WelcomePage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-neutral-bg p-6">
       <div className="w-full max-w-md space-y-12 text-center">
-        <div className="space-y-6">
-          <h1 className="text-5xl font-semibold text-neutral-dark leading-tight">
-            bluewell
+        {/* Header */}
+        <div className="space-y-2">
+          <h1 className="text-2xl font-semibold text-neutral-dark">
+            Welcome Screen
           </h1>
-          <p className="text-lg text-neutral-text leading-relaxed max-w-sm mx-auto">
-            wellness made simple for busy lives
-          </p>
         </div>
-        <div className="space-y-4">
+
+        {/* Circular Illustration */}
+        <div className="flex justify-center">
+          <div className="relative w-48 h-48 rounded-full bg-gradient-to-br from-bluewell-light/20 to-accent-soft/30 flex items-center justify-center overflow-hidden">
+            <Image
+              src="/img/welcome.png"
+              alt="Welcome illustration"
+              width={192}
+              height={192}
+              className="object-contain"
+              priority
+            />
+          </div>
+        </div>
+
+        {/* Greeting and Message */}
+        <div className="space-y-3">
+          <h2 className="text-4xl font-semibold text-neutral-dark leading-tight">
+            Let's personalize your wellness plan.
+          </h2>
+        </div>
+
+        {/* CTA Button */}
+        <div className="pt-4">
           <Button
             onClick={handleStart}
             size="xl"
-            variant="primary"
-            className="w-full"
+            className="w-full rounded-full bg-gradient-to-r from-bluewell-light to-bluewell-royal text-white hover:from-bluewell-royal hover:to-bluewell-navy shadow-md hover:shadow-lg transition-all duration-200 border-0"
           >
-            get started
+            Start Your Journey
           </Button>
-          <p className="text-sm text-neutral-muted">
-            takes less than 2 minutes
-          </p>
         </div>
       </div>
     </div>

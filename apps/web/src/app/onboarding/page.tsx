@@ -2,215 +2,107 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { QuestionCard, ProgressBar, Card, CardContent, Button } from "@halo/ui";
+import { QuestionCard, CircularProgress, Card, CardContent, Button } from "@halo/ui";
 import { SurveyQuestion } from "@halo/types";
 
-// BlueWell Onboarding Survey - Rev 3 (Improved Questions)
-// Updated with modern, natural language and fitness goals
+// BlueWell Onboarding Survey - Ultra-Short Flow (8 questions)
 
 interface SurveyQuestionExtended extends SurveyQuestion {
-  block?: string;
   helperText?: string;
   optional?: boolean;
-  skipCondition?: (answers: Record<string, any>) => boolean;
   sliderLabels?: string[]; // For slider questions
+  maxSelections?: number; // For multi-select questions
 }
 
 const BLUEWELL_SURVEY: SurveyQuestionExtended[] = [
-  // Section A — Your Daily Pattern
+  // 1. First
   {
     id: "1",
-    type: "slider",
-    text: "how consistent is your daily schedule?",
-    min: 1,
-    max: 5,
-    block: "A",
-    sliderLabels: ["very inconsistent", "somewhat inconsistent", "neutral", "mostly consistent", "very consistent"],
+    type: "compound",
+    text: "Tell us about yourself",
+    optional: false, // Question is required, but individual fields are optional
+    helperText: "We'll use this to personalize your wellness plan. Fill in whatever you're comfortable sharing.",
   },
+  // 2. Schedule consistency
   {
     id: "2",
-    type: "select",
-    text: "how much time do you realistically have for yourself most days?",
-    options: ["less than 10 minutes", "10–20 min", "20–40 min", "40–60 min", "more than an hour"],
-    block: "A",
+    type: "slider",
+    text: "How consistent is your daily schedule?",
+    min: 1,
+    max: 5,
+    sliderLabels: ["Very inconsistent", "Somewhat inconsistent", "Neutral", "Mostly consistent", "Very consistent"],
+    helperText: "This helps us suggest activities that fit your routine.",
   },
+  // 3. Available personal time
   {
     id: "3",
-    type: "slider",
-    text: "how regular are your meals on most days?",
-    min: 1,
-    max: 5,
-    block: "A",
-    sliderLabels: ["very irregular", "somewhat irregular", "neutral", "mostly regular", "very regular"],
+    type: "select",
+    text: "How much time do you realistically have for workout each day?",
+    options: ["<10 min", "10–20 min", "20–40 min", "40+ min"],
+    helperText: "We'll tailor suggestions to fit your schedule.",
   },
+  // 4. Meal regularity
   {
     id: "4",
-    type: "select",
-    text: "how often are you physically active during the week?",
-    options: ["rarely", "1–2 days per week", "3–4 days per week", "5–6 days per week", "daily"],
-    block: "A",
+    type: "slider",
+    text: "How regular are your meals on most days?",
+    min: 1,
+    max: 5,
+    sliderLabels: ["Very irregular", "Somewhat irregular", "Neutral", "Mostly regular", "Very regular"],
+    helperText: "No judgment—we're just getting to know your patterns.",
   },
+  // 5. Monthly grocery/eat out budget
   {
     id: "5",
-    type: "multi",
-    text: "any dietary preferences?",
-    options: ["Vegetarian", "Vegan", "Halal", "Kosher", "Dairy-free", "Gluten-free", "None", "Other"],
-    block: "A",
-    helperText: "select all that apply",
+    type: "slider",
+    text: "Monthly Grocery / Eat Out Budget",
+    min: 1,
+    max: 4,
+    sliderLabels: ["$50", "$100","$150","$200", "$300+"],
+    helperText: "This helps us suggest meal plans that fit your budget.",
+    optional: true,
   },
+  // 6. Weekly activity
   {
     id: "6",
-    type: "text",
-    text: "any foods to avoid?",
-    block: "A",
-    optional: true,
-    helperText: "totally optional",
-    skipCondition: (answers) => {
-      const q5 = answers["5"];
-      return Array.isArray(q5) && q5.includes("None");
-    },
+    type: "select",
+    text: "How active are you in a typical week?",
+    options: ["Rarely", "1–2 days", "3–4 days", "5+ days"],
+    helperText: "By 'active' we mean any physical activity that gets your heart rate up—like walking, running, workouts, sports, or even taking the stairs. Starting where you are is perfect.",
   },
-  // Section B — Energy, Stress, Barriers
+  // 7. Fitness preferences (comprehensive)
   {
     id: "7",
-    type: "slider",
-    text: "how would you describe your typical daily energy?",
-    min: 1,
-    max: 5,
-    block: "B",
-    sliderLabels: ["very low", "low", "moderate", "high", "very high"],
+    type: "fitness-preferences",
+    text: "Fitness Preferences",
+    helperText: "Tell us about your workout preferences.",
+    optional: true,
   },
+  // 8. Fitness goal (required)
   {
     id: "8",
-    type: "multi",
-    text: "what usually makes healthy routines difficult for you?",
-    options: ["Limited time", "Low energy", "Stress", "Forgetting", "Motivation", "Cost", "Other"],
-    block: "B",
-    helperText: "select all that apply",
+    type: "select",
+    text: "What is your primary wellness goal?",
+    options: ["Lose weight", "Build muscle", "Improve endurance", "Maintain current shape", "Reduce stress", "Improve overall fitness", "Not sure yet"],
+    helperText: "This helps us personalize your plan.",
+    // Required - not optional
   },
+  // 9. Barriers (max 3 selections)
   {
     id: "9",
-    type: "slider",
-    text: "how overwhelmed do you feel on a typical day?",
-    min: 1,
-    max: 5,
-    block: "B",
-    sliderLabels: ["not overwhelmed", "slightly", "moderately", "quite", "very overwhelmed"],
+    type: "multi",
+    text: "What tends to make staying healthy difficult for you?",
+    options: ["Time", "Energy", "Stress", "Motivation", "Forgetting", "Cost", "Other"],
+    maxSelections: 3,
+    helperText: "Select up to 3. We'll help you work around these.",
   },
+  // 10. Support preference
   {
     id: "10",
-    type: "select",
-    text: "when do you usually find things most challenging?",
-    options: ["morning", "afternoon", "evening", "late night", "it varies"],
-    block: "B",
-  },
-  // Section C — Goals (Now includes Fitness Goals)
-  {
-    id: "11",
     type: "multi",
-    text: "what are your current wellness priorities?",
-    options: ["Eating better", "Improving energy", "Feeling less stressed", "Sleeping better", "Improving fitness", "Building consistent habits", "All of these"],
-    block: "C",
-    helperText: "select all that apply",
-  },
-  {
-    id: "12",
-    type: "select",
-    text: "what is your fitness goal?",
-    options: ["Lose fat / slim down", "Maintain current shape", "Gain muscle", "Improve overall fitness", "Improve athletic performance", "I'm not sure yet"],
-    block: "C",
-    // Required question - not optional
-  },
-  {
-    id: "13",
-    type: "select",
-    text: "how structured do you want your plan to feel?",
-    options: ["very light", "balanced", "structured & guided"],
-    block: "C",
-  },
-  {
-    id: "14",
-    type: "select",
-    text: "how often would you like suggestions or reminders?",
-    options: ["only when helpful", "a few times a week", "daily", "no reminders"],
-    block: "C",
-  },
-  {
-    id: "15",
-    type: "multi",
-    text: "what areas would you like to track?",
-    options: ["nutrition", "movement", "hydration", "sleep", "mood/stress", "productivity", "all"],
-    block: "C",
-    helperText: "select all that apply",
-    skipCondition: (answers) => {
-      const q14 = answers["14"];
-      return q14 === "no reminders";
-    },
-  },
-  // Section D — Personal Details (all optional)
-  {
-    id: "16",
-    type: "height",
-    text: "height",
-    block: "D",
-    optional: true,
-    helperText: "share only what you're comfortable with",
-  },
-  {
-    id: "17",
-    type: "weight",
-    text: "weight",
-    block: "D",
-    optional: true,
-    helperText: "helps tailor portion suggestions. optional.",
-  },
-  {
-    id: "18",
-    type: "number",
-    text: "age",
-    min: 13,
-    max: 120,
-    block: "D",
-    optional: true,
-    helperText: "totally optional",
-  },
-  {
-    id: "19",
-    type: "select",
-    text: "gender",
-    options: ["woman", "man", "non-binary", "prefer not to say", "self-describe"],
-    block: "D",
-    optional: true,
-    helperText: "totally optional",
-  },
-  {
-    id: "20",
-    type: "multi",
-    text: "any cultural or lifestyle food considerations?",
-    options: ["None", "Cultural traditions", "Religious observances", "Family preferences", "Other"],
-    block: "D",
-    optional: true,
-    helperText: "select all that apply",
-  },
-  {
-    id: "21",
-    type: "text",
-    text: "any foods or ingredients you avoid for personal or cultural reasons?",
-    block: "D",
-    optional: true,
-    helperText: "totally optional",
-    skipCondition: (answers) => {
-      const q20 = answers["20"];
-      return Array.isArray(q20) && q20.includes("None");
-    },
-  },
-  {
-    id: "22",
-    type: "text",
-    text: "anything else that would help us support your goals?",
-    block: "D",
-    optional: true,
-    helperText: "totally optional",
+    text: "How would you like BlueWell to support you?",
+    options: ["Meal ideas", "Fitness routine", "Stress balance", "Daily structure / planning", "Gentle reminders", "I want help with everything"],
+    helperText: "Select all that apply.",
   },
 ];
 
@@ -224,60 +116,84 @@ export default function OnboardingPage() {
   });
   const [error, setError] = useState<string | null>(null);
   const [isComplete, setIsComplete] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Ensure component is mounted before rendering
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Load saved answers and progress from localStorage
   useEffect(() => {
-    const saved = localStorage.getItem("bluewell-onboarding");
-    if (saved) {
-      try {
-        const data = JSON.parse(saved);
-        setAnswers(data.answers || {});
-        setUnits(data.units || { heightUnit: "cm", weightUnit: "kg" });
-        if (data.currentIndex) {
-          setCurrentIndex(data.currentIndex);
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("bluewell-onboarding");
+      if (saved) {
+        try {
+          const data = JSON.parse(saved);
+          setAnswers(data.answers || {});
+          setUnits(data.units || { heightUnit: "cm", weightUnit: "kg" });
+        if (data.currentIndex !== undefined) {
+          // Ensure the saved index is valid
+          const savedIndex = Math.max(0, Math.min(data.currentIndex, BLUEWELL_SURVEY.length - 1));
+          setCurrentIndex(savedIndex);
         }
-      } catch (e) {
-        console.error("Failed to load saved progress", e);
+        } catch (e) {
+          console.error("Failed to load saved progress", e);
+        }
       }
     }
   }, []);
 
   // Save progress to localStorage on change
   useEffect(() => {
-    localStorage.setItem(
-      "bluewell-onboarding",
-      JSON.stringify({
-        answers,
-        units,
-        currentIndex,
-      })
-    );
+    if (typeof window !== "undefined") {
+      localStorage.setItem(
+        "bluewell-onboarding",
+        JSON.stringify({
+          answers,
+          units,
+          currentIndex,
+        })
+      );
+    }
   }, [answers, units, currentIndex]);
 
-  // Filter questions based on branching logic
-  const visibleQuestions = useMemo(() => {
-    return BLUEWELL_SURVEY.filter((q) => {
-      if (q.skipCondition) {
-        return !q.skipCondition(answers);
-      }
-      return true;
-    });
-  }, [answers]);
+  // Ensure currentIndex is valid - fix if out of bounds
+  useEffect(() => {
+    if (currentIndex < 0 || currentIndex >= BLUEWELL_SURVEY.length) {
+      setCurrentIndex(0);
+    }
+  }, [currentIndex]);
 
-  // Check if we're entering Section D (Personal Details)
-  const showBlockDIntro = useMemo(() => {
-    if (visibleQuestions.length === 0) return false;
-    const currentQ = visibleQuestions[currentIndex];
-    const prevQ = currentIndex > 0 ? visibleQuestions[currentIndex - 1] : null;
-    return currentQ?.block === "D" && prevQ?.block !== "D";
-  }, [visibleQuestions, currentIndex]);
+  const validIndex = Math.max(0, Math.min(currentIndex, BLUEWELL_SURVEY.length - 1));
+  const currentQuestion = BLUEWELL_SURVEY[validIndex];
+  const currentAnswer = currentQuestion ? answers[currentQuestion.id] : undefined;
 
-  const currentQuestion = visibleQuestions[currentIndex];
-  const currentAnswer = answers[currentQuestion?.id];
+  // Auto-initialize slider questions with default value
+  useEffect(() => {
+    if (currentQuestion && currentQuestion.type === "slider") {
+      setAnswers((prev) => {
+        if (!prev[currentQuestion.id]) {
+          const defaultValue = currentQuestion.min || 1;
+          return { ...prev, [currentQuestion.id]: defaultValue };
+        }
+        return prev;
+      });
+    }
+    // Auto-initialize fitness-preferences with default weekly target
+    if (currentQuestion && currentQuestion.type === "fitness-preferences") {
+      setAnswers((prev) => {
+        if (!prev[currentQuestion.id]) {
+          return { ...prev, [currentQuestion.id]: { weeklyTarget: 4 } };
+        }
+        return prev;
+      });
+    }
+  }, [validIndex, currentQuestion?.id, currentQuestion?.type]);
 
   // Calculate progress
-  const progress = currentIndex + 1;
-  const total = visibleQuestions.length;
+  const progress = validIndex + 1;
+  const total = BLUEWELL_SURVEY.length;
 
   const saveAnswer = async (questionId: string, value: any) => {
     try {
@@ -291,6 +207,14 @@ export default function OnboardingPage() {
         }),
       });
 
+      // Check if response is JSON
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text();
+        console.error("Non-JSON response from API:", text.substring(0, 200));
+        throw new Error("API returned non-JSON response");
+      }
+
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error || data.details || "Failed to save answer");
@@ -298,7 +222,9 @@ export default function OnboardingPage() {
       return data;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to save answer";
-      throw new Error(errorMessage);
+      console.error("Error saving answer:", err);
+      // Don't throw - just log the error for autosave
+      return null;
     }
   };
 
@@ -310,42 +236,55 @@ export default function OnboardingPage() {
 
     // Validate non-optional questions
     if (!skip && !currentQuestion.optional) {
-      if (!valueToSave || (Array.isArray(valueToSave) && valueToSave.length === 0)) {
+      if (!valueToSave || 
+          (Array.isArray(valueToSave) && valueToSave.length === 0) ||
+          (currentQuestion.type === "compound" && (!valueToSave || typeof valueToSave !== "object" || Object.keys(valueToSave).length === 0 || !Object.values(valueToSave).some((v: any) => v !== null && v !== undefined && v !== ""))) ||
+          (currentQuestion.type === "fitness-preferences" && (!valueToSave || typeof valueToSave !== "object" || (!valueToSave.weeklyTarget && (!valueToSave.preferredTimes || valueToSave.preferredTimes.length === 0) && (!valueToSave.sportsClasses || valueToSave.sportsClasses.length === 0))))) {
         return;
       }
     }
 
     try {
       if (valueToSave !== undefined) {
-        await saveAnswer(currentQuestion.id, valueToSave);
+        const saveResult = await saveAnswer(currentQuestion.id, valueToSave);
+        // If save failed but we got here, continue anyway (answer is in localStorage)
+        if (saveResult === null) {
+          console.warn("Save to API failed, but continuing with local storage");
+        }
       }
 
-      if (currentIndex < visibleQuestions.length - 1) {
-        setCurrentIndex(currentIndex + 1);
+      if (validIndex < BLUEWELL_SURVEY.length - 1) {
+        setCurrentIndex(validIndex + 1);
       } else {
         // Survey complete
         setIsComplete(true);
         // Clear saved progress
-        localStorage.removeItem("bluewell-onboarding");
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("bluewell-onboarding");
+        }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save answer");
+      // Only show error if it's a validation error, not an API error
+      if (err instanceof Error && !err.message.includes("API")) {
+        setError(err.message);
+      }
     }
   };
 
   const handleBack = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1);
+    if (validIndex > 0) {
+      setCurrentIndex(validIndex - 1);
     }
   };
 
   const handleChange = (value: any) => {
     setAnswers({ ...answers, [currentQuestion.id]: value });
     setError(null);
-    // Auto-save on change
+    // Auto-save on change (silently fail if API is unavailable)
     if (value !== null && value !== undefined && value !== "") {
-      saveAnswer(currentQuestion.id, value).catch(() => {
-        // Silent fail for autosave
+      saveAnswer(currentQuestion.id, value).catch((err) => {
+        // Silent fail for autosave - just log to console
+        console.warn("Autosave failed:", err);
       });
     }
   };
@@ -364,13 +303,17 @@ export default function OnboardingPage() {
       <div className="min-h-screen bg-neutral-bg flex flex-col items-center justify-center p-6">
         <Card className="w-full max-w-2xl border-0 shadow-soft">
           <CardContent className="p-8 space-y-6 text-center">
-            <h1 className="text-3xl font-semibold text-neutral-dark">you're all set</h1>
+            <h1 className="text-3xl font-semibold text-neutral-dark">You're all set.</h1>
             <p className="text-base text-neutral-text leading-relaxed">
-              we've saved your preferences and we're ready to create your personalized wellness plan.
+              We'll tailor simple steps that fit your schedule.
             </p>
             <div className="pt-4">
-              <Button onClick={handleStartPlan} size="lg" className="w-full">
-                start my plan
+              <Button 
+                onClick={handleStartPlan} 
+                size="lg" 
+                className="w-full rounded-full bg-gradient-to-r from-bluewell-light to-bluewell-royal text-white hover:from-bluewell-royal hover:to-bluewell-navy shadow-md hover:shadow-lg transition-all duration-200 border-0"
+              >
+                Start my plan
               </Button>
             </div>
           </CardContent>
@@ -379,28 +322,30 @@ export default function OnboardingPage() {
     );
   }
 
+  // Show loading state until mounted
+  if (!isMounted) {
+    return (
+      <div className="min-h-screen bg-neutral-bg flex flex-col items-center justify-center p-6">
+        <div className="text-neutral-text">Loading...</div>
+      </div>
+    );
+  }
+
   if (!currentQuestion) {
-    return null;
+    return (
+      <div className="min-h-screen bg-neutral-bg flex flex-col items-center justify-center p-6">
+        <div className="text-neutral-text">No question found</div>
+      </div>
+    );
   }
 
   return (
     <div className="min-h-screen bg-neutral-bg flex flex-col items-center justify-center p-6 pb-24">
-      <div className="w-full max-w-2xl space-y-8">
-        {/* Progress - Show "Q X of Y" */}
-        <div className="pt-8">
-          <ProgressBar current={progress} total={total} showLabel={true} />
+      <div className="w-full max-w-lg space-y-6">
+        {/* Circular Progress Indicator */}
+        <div className="pt-6">
+          <CircularProgress current={progress} total={total} />
         </div>
-
-        {/* Block D Intro */}
-        {showBlockDIntro && (
-          <Card className="w-full max-w-2xl border-0 shadow-soft bg-accent-soft/30">
-            <CardContent className="p-6">
-              <p className="text-base text-neutral-text leading-relaxed">
-                a few optional details can help tailor meal ideas and routines. share only what you're comfortable with.
-              </p>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Question Card */}
         <QuestionCard
@@ -410,7 +355,7 @@ export default function OnboardingPage() {
           onNext={() => handleNext(false)}
           onSkip={handleSkip}
           onBack={handleBack}
-          canGoBack={currentIndex > 0}
+          canGoBack={validIndex > 0}
           units={units}
           onUnitsChange={setUnits}
         />
@@ -421,11 +366,6 @@ export default function OnboardingPage() {
             <p className="text-sm text-neutral-text">{error}</p>
           </div>
         )}
-
-        {/* Supportive counter */}
-        <p className="text-center text-sm text-neutral-muted">
-          Q {progress} of {total}
-        </p>
       </div>
     </div>
   );

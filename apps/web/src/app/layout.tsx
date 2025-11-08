@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
-import { Nav } from "@/components/nav";
+import { NavigationBar } from "@halo/ui";
 
 // BlueWell Typography - Inter for calm, readable text
 const inter = Inter({ 
@@ -27,7 +27,7 @@ export default function RootLayout({
       <body className="font-sans antialiased bg-neutral-bg text-neutral-text">
         <Providers>
           {children}
-          <Nav />
+          <NavigationBar />
         </Providers>
       </body>
     </html>

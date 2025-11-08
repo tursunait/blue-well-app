@@ -10,6 +10,7 @@ export interface QuestionCardProps {
     helperText?: string;
     optional?: boolean;
     sliderLabels?: string[];
+    maxSelections?: number;
   };
   value?: any;
   onChange?: (value: any) => void;
@@ -203,33 +204,48 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
 
         return (
           <div className="space-y-3">
-            <select
-              value={value && !showOtherInput ? value : ""}
-              onChange={(e) => {
-                if (e.target.value === "Other") {
-                  handleChange("Other");
-                } else {
-                  handleChange(e.target.value);
-                }
-              }}
-              className="w-full h-14 rounded-xl border-2 border-neutral-border bg-neutral-white px-5 text-base focus:border-accent-light focus:outline-none focus:ring-2 focus:ring-accent-light/20 transition-colors"
-            >
-              <option value="">choose an option...</option>
-              {otherOptions.map((opt) => (
-                <option key={opt} value={opt}>
+            {otherOptions.map((opt) => {
+              const isSelected = value === opt;
+              return (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => handleChange(opt)}
+                  className={cn(
+                    "w-full h-14 rounded-full border-2 text-left px-5 text-base font-medium transition-all duration-200",
+                    isSelected
+                      ? "border-bluewell-light bg-bluewell-light text-white shadow-sm"
+                      : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-bluewell-light hover:bg-neutral-bg"
+                  )}
+                >
                   {opt}
-                </option>
-              ))}
-              {hasOther && <option value="Other">Other</option>}
-            </select>
-            {showOtherInput && (
-              <input
-                type="text"
-                value={typeof value === "string" && value !== "Other" ? value : ""}
-                onChange={(e) => handleChange(e.target.value)}
-                className="w-full h-14 rounded-xl border-2 border-neutral-border bg-neutral-white px-5 text-base focus:border-accent-light focus:outline-none focus:ring-2 focus:ring-accent-light/20 transition-colors"
-                placeholder="please specify..."
-              />
+                </button>
+              );
+            })}
+            {hasOther && (
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => handleChange("Other")}
+                  className={cn(
+                    "w-full h-14 rounded-full border-2 text-left px-5 text-base font-medium transition-all duration-200",
+                    showOtherInput
+                      ? "border-bluewell-light bg-bluewell-light text-white shadow-sm"
+                      : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-bluewell-light hover:bg-neutral-bg"
+                  )}
+                >
+                  Other
+                </button>
+                {showOtherInput && (
+                  <input
+                    type="text"
+                    value={typeof value === "string" && value !== "Other" ? value : ""}
+                    onChange={(e) => handleChange(e.target.value)}
+                    className="w-full h-14 rounded-xl border-2 border-neutral-border bg-neutral-white px-5 text-base focus:border-accent-light focus:outline-none focus:ring-2 focus:ring-accent-light/20 transition-colors"
+                    placeholder="please specify..."
+                  />
+                )}
+              </div>
             )}
           </div>
         );
@@ -238,11 +254,19 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
         const otherMultiOptions = question.options?.filter((opt) => opt !== "Other") || [];
         const currentArray = Array.isArray(value) ? value : [];
         const selectedOthers = currentArray.filter((v: any) => typeof v === "string" && !otherMultiOptions.includes(v));
+        const maxSelections = question.maxSelections;
+        const isAtMax = maxSelections ? currentArray.length >= maxSelections : false;
 
         return (
           <div className="space-y-3">
+            {maxSelections && (
+              <p className="text-sm text-neutral-muted">
+                Select up to {maxSelections} {maxSelections === 1 ? "option" : "options"}
+              </p>
+            )}
             {otherMultiOptions.map((opt) => {
               const isSelected = currentArray.includes(opt);
+              const isDisabled = !isSelected && isAtMax;
               return (
                 <button
                   key={opt}
@@ -250,15 +274,18 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
                   onClick={() => {
                     if (isSelected) {
                       handleChange(currentArray.filter((v: any) => v !== opt));
-                    } else {
+                    } else if (!isAtMax) {
                       handleChange([...currentArray, opt]);
                     }
                   }}
+                  disabled={isDisabled}
                   className={cn(
-                    "w-full h-14 rounded-xl border-2 text-left px-5 text-base font-medium transition-all",
+                    "w-full h-14 rounded-full border-2 text-left px-5 text-base font-medium transition-all duration-200",
                     isSelected
-                      ? "border-accent-light bg-accent-soft text-bluewell-royal"
-                      : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-neutral-muted"
+                      ? "border-bluewell-light bg-bluewell-light text-white shadow-sm"
+                      : isDisabled
+                      ? "border-neutral-border bg-neutral-surface text-neutral-muted cursor-not-allowed opacity-50"
+                      : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-bluewell-light hover:bg-neutral-bg"
                   )}
                 >
                   {opt}
@@ -267,25 +294,25 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
             })}
             {hasOtherMulti && (
               <div className="space-y-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const hasOtherSelected = selectedOthers.length > 0;
-                    if (hasOtherSelected) {
-                      handleChange(currentArray.filter((v: any) => typeof v === "string" && otherMultiOptions.includes(v)));
-                    } else {
-                      handleChange([...currentArray, "Other"]);
-                    }
-                  }}
-                  className={cn(
-                    "w-full h-14 rounded-xl border-2 text-left px-5 text-base font-medium transition-all",
-                    selectedOthers.length > 0
-                      ? "border-accent-light bg-accent-soft text-bluewell-royal"
-                      : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-neutral-muted"
-                  )}
-                >
-                  Other
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const hasOtherSelected = selectedOthers.length > 0;
+                      if (hasOtherSelected) {
+                        handleChange(currentArray.filter((v: any) => typeof v === "string" && otherMultiOptions.includes(v)));
+                      } else {
+                        handleChange([...currentArray, "Other"]);
+                      }
+                    }}
+                    className={cn(
+                      "w-full h-14 rounded-full border-2 text-left px-5 text-base font-medium transition-all duration-200",
+                      selectedOthers.length > 0
+                        ? "border-bluewell-light bg-bluewell-light text-white shadow-sm"
+                        : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-bluewell-light hover:bg-neutral-bg"
+                    )}
+                  >
+                    Other
+                  </button>
                 {selectedOthers.length > 0 && (
                   <input
                     type="text"
@@ -380,52 +407,566 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
             />
           </div>
         );
+      case "compound":
+        // Compound form - fields appear one by one dynamically
+        const compoundValue = value || {};
+        const [currentFieldIndex, setCurrentFieldIndex] = React.useState(() => {
+          // Find first empty field or start at 0
+          const fields = ["height", "weight", "age", "gender", "foodPreferences", "foodsToAvoid"];
+          const firstEmpty = fields.findIndex((field) => {
+            if (field === "height") return !compoundValue.heightCm || compoundValue.heightCm < 50;
+            if (field === "weight") return !compoundValue.weightKg || compoundValue.weightKg < 1;
+            if (field === "age") return !compoundValue.age || compoundValue.age < 13;
+            if (field === "gender") return !compoundValue.gender;
+            if (field === "foodPreferences") return !compoundValue.foodPreferences || compoundValue.foodPreferences.length === 0;
+            if (field === "foodsToAvoid") return !compoundValue.foodsToAvoid || compoundValue.foodsToAvoid.trim() === "";
+            return true;
+          });
+          return firstEmpty >= 0 ? firstEmpty : 0;
+        });
+
+        // Compute display values from stored canonical values
+        const compoundHeightCm = compoundValue.heightCm || 0;
+        const compoundHeightFeetInches = compoundHeightCm ? cmToFeetInches(compoundHeightCm) : { feet: 0, inches: 0 };
+        const compoundWeightDisplay = compoundValue.weightKg 
+          ? (isWeightMetric ? compoundValue.weightKg.toString() : kgToLbs(compoundValue.weightKg).toFixed(1))
+          : "";
+
+        const handleCompoundChange = (field: string, fieldValue: any) => {
+          const newValue = { ...compoundValue, [field]: fieldValue };
+          onChange?.(newValue);
+        };
+
+        const handleCompoundHeightMetricChange = (newCm: number) => {
+          handleCompoundChange("heightCm", newCm);
+        };
+
+        const handleCompoundHeightImperialChange = (newFeet: number, newInches: number) => {
+          const newCm = feetInchesToCm(newFeet, newInches);
+          handleCompoundChange("heightCm", newCm);
+        };
+
+        const handleCompoundWeightChange = (inputValue: string) => {
+          const numValue = Number(inputValue);
+          if (!isNaN(numValue) && numValue > 0) {
+            const canonicalValue = isWeightMetric ? numValue : lbsToKg(numValue);
+            handleCompoundChange("weightKg", canonicalValue);
+          } else {
+            handleCompoundChange("weightKg", null);
+          }
+        };
+
+        const handleNextField = () => {
+          if (currentFieldIndex < 5) {
+            setCurrentFieldIndex(currentFieldIndex + 1);
+          }
+        };
+
+        const handleSkipField = () => {
+          handleNextField();
+        };
+
+        const foodPrefsOptions = ["Vegetarian", "Vegan", "Halal", "Kosher", "Dairy-free", "Gluten-free", "None", "Other"];
+        const foodPrefsValue = Array.isArray(compoundValue.foodPreferences) ? compoundValue.foodPreferences : [];
+        const hasFoodPrefsOther = foodPrefsValue.some((v: any) => typeof v === "string" && !foodPrefsOptions.includes(v));
+        const foodPrefsOtherValue = foodPrefsValue.find((v: any) => typeof v === "string" && !foodPrefsOptions.includes(v)) || "";
+
+        // Render current field based on index
+        const renderCurrentField = () => {
+          switch (currentFieldIndex) {
+            case 0: // Height
+              return (
+                <div className="space-y-3">
+                  <label className="text-sm font-medium text-neutral-dark">Height</label>
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onUnitsChange?.({ ...units, heightUnit: units.heightUnit === "cm" ? "ft_in" : "cm" });
+                      }}
+                      className="text-sm text-accent-light hover:text-bluewell-royal font-medium"
+                    >
+                      switch to {units.heightUnit === "cm" ? "ft+in" : "cm"}
+                    </button>
+                  </div>
+                  {isHeightMetric ? (
+                    <input
+                      type="number"
+                      value={compoundHeightCm || ""}
+                      onChange={(e) => handleCompoundHeightMetricChange(Number(e.target.value))}
+                      min={50}
+                      max={250}
+                      className="w-full h-14 rounded-xl border-2 border-neutral-border bg-neutral-white px-5 text-base focus:border-accent-light focus:outline-none focus:ring-2 focus:ring-accent-light/20 transition-colors"
+                      placeholder="enter height in cm"
+                      autoFocus
+                    />
+                  ) : (
+                    <div className="flex gap-3">
+                      <div className="flex-1">
+                        <label className="block text-sm text-neutral-muted mb-2">feet</label>
+                        <input
+                          type="number"
+                          value={compoundHeightFeetInches.feet || ""}
+                          onChange={(e) => handleCompoundHeightImperialChange(Number(e.target.value), compoundHeightFeetInches.inches)}
+                          min={0}
+                          max={8}
+                          className="w-full h-14 rounded-xl border-2 border-neutral-border bg-neutral-white px-5 text-base focus:border-accent-light focus:outline-none focus:ring-2 focus:ring-accent-light/20 transition-colors"
+                          autoFocus
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-sm text-neutral-muted mb-2">inches</label>
+                        <input
+                          type="number"
+                          value={compoundHeightFeetInches.inches || ""}
+                          onChange={(e) => handleCompoundHeightImperialChange(compoundHeightFeetInches.feet, Number(e.target.value))}
+                          min={0}
+                          max={11}
+                          className="w-full h-14 rounded-xl border-2 border-neutral-border bg-neutral-white px-5 text-base focus:border-accent-light focus:outline-none focus:ring-2 focus:ring-accent-light/20 transition-colors"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex gap-3 pt-2">
+                    <Button
+                      onClick={handleNextField}
+                      disabled={!compoundHeightCm || compoundHeightCm < 50}
+                      size="lg"
+                      className="flex-1 rounded-full bg-gradient-to-r from-bluewell-light to-bluewell-royal text-white hover:from-bluewell-royal hover:to-bluewell-navy shadow-md hover:shadow-lg transition-all duration-200 border-0"
+                    >
+                      Next
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={handleSkipField}
+                      size="lg"
+                      className="flex-1 rounded-full border border-neutral-border"
+                    >
+                      Skip
+                    </Button>
+                  </div>
+                </div>
+              );
+            case 1: // Weight
+              return (
+                <div className="space-y-3">
+                  <label className="text-sm font-medium text-neutral-dark">
+                    Weight
+                    <span className="text-xs text-neutral-muted font-normal ml-2">Helps tailor portions.</span>
+                  </label>
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onUnitsChange?.({ ...units, weightUnit: units.weightUnit === "kg" ? "lb" : "kg" });
+                      }}
+                      className="text-sm text-accent-light hover:text-bluewell-royal font-medium"
+                    >
+                      switch to {units.weightUnit === "kg" ? "lbs" : "kg"}
+                    </button>
+                  </div>
+                  <input
+                    type="number"
+                    value={compoundWeightDisplay}
+                    onChange={(e) => handleCompoundWeightChange(e.target.value)}
+                    min={1}
+                    max={500}
+                    step="0.1"
+                    className="w-full h-14 rounded-xl border-2 border-neutral-border bg-neutral-white px-5 text-base focus:border-accent-light focus:outline-none focus:ring-2 focus:ring-accent-light/20 transition-colors"
+                    placeholder={`enter weight in ${units.weightUnit}`}
+                    autoFocus
+                  />
+                  <div className="flex gap-3 pt-2">
+                    <Button
+                      onClick={handleNextField}
+                      disabled={!compoundValue.weightKg || compoundValue.weightKg < 1}
+                      size="lg"
+                      className="flex-1 rounded-full bg-gradient-to-r from-bluewell-light to-bluewell-royal text-white hover:from-bluewell-royal hover:to-bluewell-navy shadow-md hover:shadow-lg transition-all duration-200 border-0"
+                    >
+                      Next
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={handleSkipField}
+                      size="lg"
+                      className="flex-1 rounded-full border border-neutral-border"
+                    >
+                      Skip
+                    </Button>
+                  </div>
+                </div>
+              );
+            case 2: // Age
+              return (
+                <div className="space-y-3">
+                  <label className="text-sm font-medium text-neutral-dark">Age</label>
+                  <input
+                    type="number"
+                    value={compoundValue.age || ""}
+                    onChange={(e) => handleCompoundChange("age", e.target.value ? Number(e.target.value) : null)}
+                    min={13}
+                    max={120}
+                    className="w-full h-14 rounded-xl border-2 border-neutral-border bg-neutral-white px-5 text-base focus:border-accent-light focus:outline-none focus:ring-2 focus:ring-accent-light/20 transition-colors"
+                    placeholder="enter age"
+                    autoFocus
+                  />
+                  <div className="flex gap-3 pt-2">
+                    <Button
+                      onClick={handleNextField}
+                      disabled={!compoundValue.age || compoundValue.age < 13}
+                      size="lg"
+                      className="flex-1 rounded-full bg-gradient-to-r from-bluewell-light to-bluewell-royal text-white hover:from-bluewell-royal hover:to-bluewell-navy shadow-md hover:shadow-lg transition-all duration-200 border-0"
+                    >
+                      Next
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={handleSkipField}
+                      size="lg"
+                      className="flex-1 rounded-full border border-neutral-border"
+                    >
+                      Skip
+                    </Button>
+                  </div>
+                </div>
+              );
+            case 3: // Gender
+              return (
+                <div className="space-y-3">
+                  <label className="text-sm font-medium text-neutral-dark">Gender</label>
+                  <div className="space-y-2">
+                    {["Woman", "Man", "Non-binary", "Prefer not to say", "Self-describe"].map((opt) => {
+                      const isSelected = compoundValue.gender === opt;
+                      return (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => {
+                            handleCompoundChange("gender", opt);
+                            // Auto-advance after selection
+                            setTimeout(() => handleNextField(), 300);
+                          }}
+                          className={cn(
+                            "w-full h-14 rounded-full border-2 text-left px-5 text-base font-medium transition-all duration-200",
+                            isSelected
+                              ? "border-bluewell-light bg-bluewell-light text-white shadow-sm"
+                              : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-bluewell-light hover:bg-neutral-bg"
+                          )}
+                        >
+                          {opt}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <Button
+                      variant="ghost"
+                      onClick={handleSkipField}
+                      size="lg"
+                      className="w-full rounded-full border border-neutral-border"
+                    >
+                      Skip
+                    </Button>
+                  </div>
+                </div>
+              );
+            case 4: // Food preferences
+              return (
+                <div className="space-y-3">
+                  <label className="text-sm font-medium text-neutral-dark">Food preferences</label>
+                  <div className="space-y-2">
+                    {foodPrefsOptions.filter(opt => opt !== "Other").map((opt) => {
+                      const isSelected = foodPrefsValue.includes(opt);
+                      return (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => {
+                            const newPrefs = isSelected
+                              ? foodPrefsValue.filter((v: any) => v !== opt)
+                              : [...foodPrefsValue, opt];
+                            handleCompoundChange("foodPreferences", newPrefs);
+                          }}
+                          className={cn(
+                            "w-full h-14 rounded-full border-2 text-left px-5 text-base font-medium transition-all duration-200",
+                            isSelected
+                              ? "border-bluewell-light bg-bluewell-light text-white shadow-sm"
+                              : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-bluewell-light hover:bg-neutral-bg"
+                          )}
+                        >
+                          {opt}
+                        </button>
+                      );
+                    })}
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (hasFoodPrefsOther) {
+                            const newPrefs = foodPrefsValue.filter((v: any) => typeof v === "string" && foodPrefsOptions.includes(v));
+                            handleCompoundChange("foodPreferences", newPrefs);
+                          } else {
+                            handleCompoundChange("foodPreferences", [...foodPrefsValue, "Other"]);
+                          }
+                        }}
+                        className={cn(
+                          "w-full h-14 rounded-full border-2 text-left px-5 text-base font-medium transition-all duration-200",
+                          hasFoodPrefsOther
+                            ? "border-bluewell-light bg-bluewell-light text-white shadow-sm"
+                            : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-bluewell-light hover:bg-neutral-bg"
+                        )}
+                      >
+                        Other
+                      </button>
+                      {hasFoodPrefsOther && (
+                        <input
+                          type="text"
+                          value={foodPrefsOtherValue}
+                          onChange={(e) => {
+                            const withoutOther = foodPrefsValue.filter((v: any) => typeof v === "string" && foodPrefsOptions.includes(v));
+                            handleCompoundChange("foodPreferences", [...withoutOther, e.target.value]);
+                          }}
+                          className="w-full h-14 rounded-xl border-2 border-neutral-border bg-neutral-white px-5 text-base focus:border-accent-light focus:outline-none focus:ring-2 focus:ring-accent-light/20 transition-colors"
+                          placeholder="please specify..."
+                          autoFocus
+                        />
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <Button
+                      onClick={handleNextField}
+                      size="lg"
+                      className="flex-1 rounded-full bg-gradient-to-r from-bluewell-light to-bluewell-royal text-white hover:from-bluewell-royal hover:to-bluewell-navy shadow-md hover:shadow-lg transition-all duration-200 border-0"
+                    >
+                      Next
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={handleSkipField}
+                      size="lg"
+                      className="flex-1 rounded-full border border-neutral-border"
+                    >
+                      Skip
+                    </Button>
+                  </div>
+                </div>
+              );
+            case 5: // Foods to avoid (last field)
+              return (
+                <div className="space-y-3">
+                  <label className="text-sm font-medium text-neutral-dark">Foods to avoid</label>
+                  <input
+                    type="text"
+                    value={compoundValue.foodsToAvoid || ""}
+                    onChange={(e) => handleCompoundChange("foodsToAvoid", e.target.value || null)}
+                    className="w-full h-14 rounded-xl border-2 border-neutral-border bg-neutral-white px-5 text-base focus:border-accent-light focus:outline-none focus:ring-2 focus:ring-accent-light/20 transition-colors"
+                    placeholder="type any foods to avoid..."
+                    autoFocus
+                  />
+                  <div className="flex gap-3 pt-2">
+                    <Button
+                      variant="ghost"
+                      onClick={handleSkipField}
+                      size="lg"
+                      className="w-full rounded-full border border-neutral-border"
+                    >
+                      Skip
+                    </Button>
+                  </div>
+                </div>
+              );
+            default:
+              return null;
+          }
+        };
+
+        return (
+          <div className="space-y-6">
+            {renderCurrentField()}
+          </div>
+        );
+      case "fitness-preferences":
+        // Fitness Preferences - Weekly workout target, preferred times, sports & classes
+        const fitnessValue = value || {};
+        
+        const handleFitnessChange = (field: string, fieldValue: any) => {
+          const newValue = { ...fitnessValue, [field]: fieldValue };
+          onChange?.(newValue);
+        };
+
+        // Weekly workout target (slider: 1-7 days)
+        const weeklyTarget = fitnessValue.weeklyTarget || 4;
+        
+        // Preferred times (multi-select)
+        const preferredTimes = Array.isArray(fitnessValue.preferredTimes) ? fitnessValue.preferredTimes : [];
+        const timeOptions = ["Morning", "Afternoon"];
+        
+        // Sports & Classes (multi-select)
+        const sportsClasses = Array.isArray(fitnessValue.sportsClasses) ? fitnessValue.sportsClasses : [];
+        const sportsOptions = ["Yoga", "HIIT", "Running", "Swimming", "Cycling", "Pilates"];
+
+        return (
+          <div className="space-y-8">
+            {/* Weekly workout target */}
+            <div className="space-y-4">
+              <label className="text-base font-semibold text-neutral-dark">Weekly workout target</label>
+              <div className="space-y-3">
+                <div className="text-3xl font-bold text-neutral-dark">{weeklyTarget} days</div>
+                <div className="relative">
+                  <input
+                    type="range"
+                    min={1}
+                    max={7}
+                    value={weeklyTarget}
+                    onChange={(e) => handleFitnessChange("weeklyTarget", Number(e.target.value))}
+                    className="w-full h-2 bg-neutral-surface rounded-full appearance-none cursor-pointer slider"
+                    style={{
+                      background: `linear-gradient(to right, #6CA0DC 0%, #6CA0DC ${((weeklyTarget - 1) / 6) * 100}%, #DDE3EA ${((weeklyTarget - 1) / 6) * 100}%, #DDE3EA 100%)`,
+                    }}
+                  />
+                </div>
+                <div className="text-sm text-neutral-muted text-right">days per week</div>
+              </div>
+            </div>
+
+            {/* Preferred times */}
+            <div className="space-y-4">
+              <label className="text-base font-semibold text-neutral-dark">Preferred times</label>
+              <div className="flex gap-3">
+                {timeOptions.map((time) => {
+                  const isSelected = preferredTimes.includes(time);
+                  return (
+                    <button
+                      key={time}
+                      type="button"
+                      onClick={() => {
+                        const newTimes = isSelected
+                          ? preferredTimes.filter((t: string) => t !== time)
+                          : [...preferredTimes, time];
+                        handleFitnessChange("preferredTimes", newTimes);
+                      }}
+                      className={cn(
+                        "flex-1 h-12 rounded-full border-2 text-sm font-medium transition-all duration-200",
+                        isSelected
+                          ? "border-bluewell-light bg-gradient-to-r from-bluewell-light to-green-400 text-white shadow-sm"
+                          : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-bluewell-light"
+                      )}
+                    >
+                      {time}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Sports & Classes */}
+            <div className="space-y-4">
+              <label className="text-base font-semibold text-neutral-dark">Sports & Classes</label>
+              <div className="grid grid-cols-2 gap-3">
+                {sportsOptions.map((sport) => {
+                  const isSelected = sportsClasses.includes(sport);
+                  return (
+                    <button
+                      key={sport}
+                      type="button"
+                      onClick={() => {
+                        const newSports = isSelected
+                          ? sportsClasses.filter((s: string) => s !== sport)
+                          : [...sportsClasses, sport];
+                        handleFitnessChange("sportsClasses", newSports);
+                      }}
+                      className={cn(
+                        "h-12 rounded-full border-2 text-sm font-medium transition-all duration-200",
+                        isSelected
+                          ? "border-bluewell-light bg-gradient-to-r from-bluewell-light to-green-400 text-white shadow-sm"
+                          : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-bluewell-light"
+                      )}
+                    >
+                      {sport}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
       default:
         return null;
     }
   };
 
-  const hasValue = value !== null && value !== undefined && value !== "";
+  const hasValue = value !== null && value !== undefined && (typeof value === "number" || value !== "");
   const hasArrayValue = Array.isArray(value) && value.length > 0;
-  const isValid = hasValue || hasArrayValue;
+  // For compound questions, check that at least one field has a meaningful value
+  const hasCompoundValue = question.type === "compound" && value && typeof value === "object" && Object.keys(value).length > 0 && Object.values(value).some((v: any, idx: number) => {
+    if (v === null || v === undefined || v === "") return false;
+    // For heightCm, check it's a realistic height (at least 50cm)
+    if (Object.keys(value)[idx] === "heightCm" && typeof v === "number") return v >= 50;
+    // For weightKg, check it's a realistic weight (at least 1kg)
+    if (Object.keys(value)[idx] === "weightKg" && typeof v === "number") return v >= 1;
+    // For age, check it's a realistic age (at least 13)
+    if (Object.keys(value)[idx] === "age" && typeof v === "number") return v >= 13;
+    // For numbers, check they're > 0 (not just default/empty)
+    if (typeof v === "number") return v > 0;
+    // For arrays, check they have items
+    if (Array.isArray(v)) return v.length > 0;
+    // For strings, check they're not just whitespace
+    if (typeof v === "string") return v.trim().length > 0;
+    return true;
+  });
+  const hasFitnessPreferences = question.type === "fitness-preferences" && value && typeof value === "object" && (
+    value.weeklyTarget !== undefined ||
+    (Array.isArray(value.preferredTimes) && value.preferredTimes.length > 0) ||
+    (Array.isArray(value.sportsClasses) && value.sportsClasses.length > 0)
+  );
+  const isValid = hasValue || hasArrayValue || hasCompoundValue || hasFitnessPreferences;
 
   return (
-    <Card className="w-full max-w-2xl border-0 shadow-soft">
-      <CardContent className="p-8 space-y-6">
+    <Card className="w-full max-w-lg border-0 shadow-soft">
+      <CardContent className="p-6 space-y-6">
         <div className="space-y-2">
-          <h2 className="text-2xl font-semibold text-neutral-dark leading-tight">
+          <h2 className="text-xl font-semibold text-neutral-dark leading-tight">
             {question.text}
           </h2>
           {question.helperText && (
-            <p className="text-sm text-neutral-muted">{question.helperText}</p>
+            <p className="text-sm text-neutral-muted leading-relaxed">{question.helperText}</p>
           )}
         </div>
         <div className="space-y-4">{renderInput()}</div>
-        <div className="flex flex-col gap-3 pt-4">
+        <div className="flex flex-col gap-3 pt-6">
           <div className="flex justify-between gap-4">
             {canGoBack && (
-              <Button variant="ghost" onClick={onBack} size="lg" className="flex-1">
-                back
+              <Button 
+                variant="ghost" 
+                onClick={onBack} 
+                size="lg" 
+                className="flex-1 rounded-full"
+              >
+                Back
               </Button>
             )}
             <Button
               onClick={onNext}
               disabled={!question.optional && !isValid}
               size="lg"
-              className={cn("flex-1", !canGoBack && "w-full")}
+              className={cn(
+                "flex-1 rounded-full bg-gradient-to-r from-bluewell-light to-bluewell-royal text-white hover:from-bluewell-royal hover:to-bluewell-navy shadow-md hover:shadow-lg transition-all duration-200 border-0",
+                !canGoBack && "w-full"
+              )}
             >
-              {canGoBack ? "next" : "continue"}
+              {canGoBack ? "Next" : "Continue"}
             </Button>
           </div>
-          {/* Skip for now - always visible */}
-          {onSkip && (
+          {/* Skip for now - only show if question is optional */}
+          {onSkip && question.optional && (
             <Button
               variant="minimal"
               onClick={onSkip}
               size="md"
-              className="w-full"
+              className="w-full rounded-full"
             >
-              skip for now
+              Skip for now
             </Button>
           )}
         </div>
