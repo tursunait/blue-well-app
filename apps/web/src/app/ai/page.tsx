@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { ChatBubble, Button } from "@halo/ui";
+import { ChatBubble } from "@halo/ui";
 import { chatRequest, addCalendarEvent } from "@/lib/api";
 import { ChatMessage, Suggestion } from "@halo/types";
+import { Send } from "lucide-react";
 
-// BlueWell Chat - Soft bubbles, big action cards, minimal text
-export default function ChatPage() {
+// AI Chatbot Page - Full page dedicated to AI assistant
+export default function AIPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
 
@@ -23,7 +24,6 @@ export default function ChatPage() {
 
   const sendMessage = useMutation({
     mutationFn: async (message: string) => {
-      // Get last 5 messages for conversation history
       const conversationHistory = messages
         .slice(-5)
         .map((msg) => ({
@@ -49,6 +49,16 @@ export default function ChatPage() {
       };
       setMessages((prev) => [...prev, userMessage, aiMessage]);
       setInput("");
+    },
+    onError: (error) => {
+      console.error("Chat error:", error);
+      const errorMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: "Sorry, I'm having trouble connecting. Please make sure the API server is running on port 8000.",
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
     },
   });
 
@@ -81,16 +91,19 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-screen flex-col bg-neutral-bg pb-24">
-      {/* Header - Minimal */}
+      {/* Header */}
       <div className="border-b border-neutral-border bg-neutral-white px-6 py-4">
-        <h1 className="text-xl font-semibold text-neutral-dark">chat</h1>
+        <h1 className="text-xl font-semibold text-neutral-dark">AI Assistant</h1>
+        <p className="text-sm text-neutral-muted mt-1">
+          Ask me anything about workouts, meals, classes, or your daily plan
+        </p>
       </div>
 
-      {/* Messages - Soft, calm */}
+      {/* Messages */}
       <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full space-y-4 text-center">
-            <p className="text-lg text-neutral-text">how can i help you today?</p>
+            <p className="text-lg text-neutral-text">How can I help you today?</p>
             <div className="flex flex-wrap gap-3 justify-center max-w-md">
               {quickReplies.map((reply) => (
                 <button
@@ -127,7 +140,7 @@ export default function ChatPage() {
         )}
       </div>
 
-      {/* Input - Big, clear */}
+      {/* Input */}
       <div className="border-t border-neutral-border bg-neutral-white px-6 py-4">
         <div className="flex gap-3 items-end">
           <input
@@ -139,23 +152,24 @@ export default function ChatPage() {
                 sendMessage.mutate(input);
               }
             }}
-            placeholder="type your message..."
+            placeholder="Ask me anything..."
             className="flex-1 h-14 rounded-xl border-2 border-neutral-border bg-neutral-white px-5 text-base focus:border-accent-light focus:outline-none focus:ring-2 focus:ring-accent-light/20 transition-colors"
             disabled={sendMessage.isPending}
           />
-          <Button
+          <button
             onClick={() => {
               if (input.trim() && !sendMessage.isPending) {
                 sendMessage.mutate(input);
               }
             }}
             disabled={!input.trim() || sendMessage.isPending}
-            size="lg"
+            className="h-14 w-14 rounded-xl bg-bluewell-royal text-white hover:bg-bluewell-navy disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
           >
-            send
-          </Button>
+            <Send className="h-5 w-5" />
+          </button>
         </div>
       </div>
     </div>
   );
 }
+

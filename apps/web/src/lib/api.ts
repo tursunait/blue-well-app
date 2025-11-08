@@ -1,12 +1,22 @@
 const FASTAPI_BASE_URL = process.env.NEXT_PUBLIC_FASTAPI_BASE_URL || "http://localhost:8000";
 
-export async function chatRequest(message: string, context?: Record<string, any>) {
+export async function chatRequest(
+  message: string,
+  context?: Record<string, any>,
+  conversationHistory?: Array<{ role: string; content: string }>,
+  userProfile?: Record<string, any>
+) {
   const response = await fetch(`${FASTAPI_BASE_URL}/chat`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ message, context }),
+    body: JSON.stringify({
+      message,
+      context,
+      conversation_history: conversationHistory,
+      user_profile: userProfile,
+    }),
   });
   if (!response.ok) throw new Error("Chat request failed");
   return response.json();
