@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { QuestionCard, ProgressBar, Card, CardContent, Button } from "@halo/ui";
+import { QuestionCard, CircularProgress, Card, CardContent, Button } from "@halo/ui";
 import { SurveyQuestion } from "@halo/types";
 
 // BlueWell Onboarding Survey - Ultra-Short Flow (8 questions)
@@ -15,68 +15,94 @@ interface SurveyQuestionExtended extends SurveyQuestion {
 }
 
 const BLUEWELL_SURVEY: SurveyQuestionExtended[] = [
-  // 1. Schedule consistency
+  // 1. Optional details (compound form) - First, but fields are optional
   {
     id: "1",
+    type: "compound",
+    text: "Optional details to tailor your plan",
+    optional: true, // Question can be skipped, but individual fields are optional
+    helperText: "Share only what you're comfortable with. You can skip this step.",
+  },
+  // 2. Schedule consistency
+  {
+    id: "2",
     type: "slider",
     text: "How consistent is your daily schedule?",
     min: 1,
     max: 5,
     sliderLabels: ["Very inconsistent", "Somewhat inconsistent", "Neutral", "Mostly consistent", "Very consistent"],
+    helperText: "This helps us suggest activities that fit your routine.",
   },
-  // 2. Available personal time
+  // 3. Available personal time
   {
-    id: "2",
+    id: "3",
     type: "select",
     text: "How much time do you realistically have for yourself each day?",
     options: ["<10 min", "10–20 min", "20–40 min", "40+ min"],
+    helperText: "We'll tailor suggestions to fit your schedule.",
   },
-  // 3. Meal regularity
+  // 4. Meal regularity
   {
-    id: "3",
+    id: "4",
     type: "slider",
     text: "How regular are your meals on most days?",
     min: 1,
     max: 5,
     sliderLabels: ["Very irregular", "Somewhat irregular", "Neutral", "Mostly regular", "Very regular"],
+    helperText: "No judgment—we're just getting to know your patterns.",
   },
-  // 4. Weekly activity
+  // 5. Monthly grocery/eat out budget
   {
-    id: "4",
+    id: "5",
+    type: "slider",
+    text: "Monthly Grocery / Eat Out Budget",
+    min: 1,
+    max: 4,
+    sliderLabels: ["$150", "$200", "$500", "$500+"],
+    helperText: "This helps us suggest meal plans that fit your budget.",
+    optional: true,
+  },
+  // 6. Weekly activity
+  {
+    id: "6",
     type: "select",
     text: "How active are you in a typical week?",
     options: ["Rarely", "1–2 days", "3–4 days", "5+ days"],
+    helperText: "Starting where you are is perfect.",
   },
-  // 5. Fitness goal (required)
+  // 7. Fitness preferences (comprehensive)
   {
-    id: "5",
+    id: "7",
+    type: "fitness-preferences",
+    text: "Fitness Preferences",
+    helperText: "Tell us about your workout preferences.",
+    optional: true,
+  },
+  // 8. Fitness goal (required)
+  {
+    id: "8",
     type: "select",
-    text: "What is your current fitness goal?",
-    options: ["Lose fat / slim down", "Maintain my current shape", "Gain muscle", "Improve overall fitness", "Improve athletic performance", "Not sure yet"],
+    text: "What is your primary wellness goal?",
+    options: ["Lose weight", "Build muscle", "Improve endurance", "Maintain current shape", "Reduce stress", "Improve overall fitness", "Not sure yet"],
+    helperText: "This helps us personalize your plan.",
     // Required - not optional
   },
-  // 6. Barriers (max 3 selections)
+  // 9. Barriers (max 3 selections)
   {
-    id: "6",
+    id: "9",
     type: "multi",
     text: "What tends to make staying healthy difficult for you?",
     options: ["Time", "Energy", "Stress", "Motivation", "Forgetting", "Cost", "Other"],
     maxSelections: 3,
+    helperText: "Select up to 3. We'll help you work around these.",
   },
-  // 7. Support preference
+  // 10. Support preference
   {
-    id: "7",
+    id: "10",
     type: "multi",
     text: "How would you like BlueWell to support you?",
     options: ["Meal ideas", "Fitness routine", "Stress balance", "Daily structure / planning", "Gentle reminders", "I want help with everything"],
-  },
-  // 8. Optional details (compound form)
-  {
-    id: "8",
-    type: "compound",
-    text: "Optional details to tailor your plan (you can skip).",
-    optional: true,
-    helperText: "Share only what you're comfortable with.",
+    helperText: "Select all that apply.",
   },
 ];
 
@@ -154,6 +180,15 @@ export default function OnboardingPage() {
         return prev;
       });
     }
+    // Auto-initialize fitness-preferences with default weekly target
+    if (currentQuestion && currentQuestion.type === "fitness-preferences") {
+      setAnswers((prev) => {
+        if (!prev[currentQuestion.id]) {
+          return { ...prev, [currentQuestion.id]: { weeklyTarget: 4 } };
+        }
+        return prev;
+      });
+    }
   }, [validIndex, currentQuestion?.id, currentQuestion?.type]);
 
   // Calculate progress
@@ -203,7 +238,8 @@ export default function OnboardingPage() {
     if (!skip && !currentQuestion.optional) {
       if (!valueToSave || 
           (Array.isArray(valueToSave) && valueToSave.length === 0) ||
-          (currentQuestion.type === "compound" && (!valueToSave || typeof valueToSave !== "object" || Object.keys(valueToSave).length === 0 || !Object.values(valueToSave).some((v: any) => v !== null && v !== undefined && v !== "")))) {
+          (currentQuestion.type === "compound" && (!valueToSave || typeof valueToSave !== "object" || Object.keys(valueToSave).length === 0 || !Object.values(valueToSave).some((v: any) => v !== null && v !== undefined && v !== ""))) ||
+          (currentQuestion.type === "fitness-preferences" && (!valueToSave || typeof valueToSave !== "object" || (!valueToSave.weeklyTarget && (!valueToSave.preferredTimes || valueToSave.preferredTimes.length === 0) && (!valueToSave.sportsClasses || valueToSave.sportsClasses.length === 0))))) {
         return;
       }
     }
@@ -272,7 +308,11 @@ export default function OnboardingPage() {
               We'll tailor simple steps that fit your schedule.
             </p>
             <div className="pt-4">
-              <Button onClick={handleStartPlan} size="lg" className="w-full">
+              <Button 
+                onClick={handleStartPlan} 
+                size="lg" 
+                className="w-full rounded-full bg-gradient-to-r from-bluewell-light to-bluewell-royal text-white hover:from-bluewell-royal hover:to-bluewell-navy shadow-md hover:shadow-lg transition-all duration-200 border-0"
+              >
                 Start my plan
               </Button>
             </div>
@@ -301,10 +341,10 @@ export default function OnboardingPage() {
 
   return (
     <div className="min-h-screen bg-neutral-bg flex flex-col items-center justify-center p-6 pb-24">
-      <div className="w-full max-w-2xl space-y-8">
-        {/* Progress - Show "Q X of 8" */}
-        <div className="pt-8">
-          <ProgressBar current={progress} total={total} showLabel={true} />
+      <div className="w-full max-w-lg space-y-6">
+        {/* Circular Progress Indicator */}
+        <div className="pt-6">
+          <CircularProgress current={progress} total={total} />
         </div>
 
         {/* Question Card */}

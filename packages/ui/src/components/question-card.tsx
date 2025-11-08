@@ -212,10 +212,10 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
                   type="button"
                   onClick={() => handleChange(opt)}
                   className={cn(
-                    "w-full h-14 rounded-xl border-2 text-left px-5 text-base font-medium transition-all",
+                    "w-full h-14 rounded-full border-2 text-left px-5 text-base font-medium transition-all duration-200",
                     isSelected
-                      ? "border-accent-light bg-accent-soft text-bluewell-royal"
-                      : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-neutral-muted"
+                      ? "border-bluewell-light bg-bluewell-light text-white shadow-sm"
+                      : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-bluewell-light hover:bg-neutral-bg"
                   )}
                 >
                   {opt}
@@ -228,10 +228,10 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
                   type="button"
                   onClick={() => handleChange("Other")}
                   className={cn(
-                    "w-full h-14 rounded-xl border-2 text-left px-5 text-base font-medium transition-all",
+                    "w-full h-14 rounded-full border-2 text-left px-5 text-base font-medium transition-all duration-200",
                     showOtherInput
-                      ? "border-accent-light bg-accent-soft text-bluewell-royal"
-                      : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-neutral-muted"
+                      ? "border-bluewell-light bg-bluewell-light text-white shadow-sm"
+                      : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-bluewell-light hover:bg-neutral-bg"
                   )}
                 >
                   Other
@@ -280,12 +280,12 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
                   }}
                   disabled={isDisabled}
                   className={cn(
-                    "w-full h-14 rounded-xl border-2 text-left px-5 text-base font-medium transition-all",
+                    "w-full h-14 rounded-full border-2 text-left px-5 text-base font-medium transition-all duration-200",
                     isSelected
-                      ? "border-accent-light bg-accent-soft text-bluewell-royal"
+                      ? "border-bluewell-light bg-bluewell-light text-white shadow-sm"
                       : isDisabled
-                      ? "border-neutral-border bg-neutral-surface text-neutral-muted cursor-not-allowed"
-                      : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-neutral-muted"
+                      ? "border-neutral-border bg-neutral-surface text-neutral-muted cursor-not-allowed opacity-50"
+                      : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-bluewell-light hover:bg-neutral-bg"
                   )}
                 >
                   {opt}
@@ -294,25 +294,25 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
             })}
             {hasOtherMulti && (
               <div className="space-y-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const hasOtherSelected = selectedOthers.length > 0;
-                    if (hasOtherSelected) {
-                      handleChange(currentArray.filter((v: any) => typeof v === "string" && otherMultiOptions.includes(v)));
-                    } else {
-                      handleChange([...currentArray, "Other"]);
-                    }
-                  }}
-                  className={cn(
-                    "w-full h-14 rounded-xl border-2 text-left px-5 text-base font-medium transition-all",
-                    selectedOthers.length > 0
-                      ? "border-accent-light bg-accent-soft text-bluewell-royal"
-                      : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-neutral-muted"
-                  )}
-                >
-                  Other
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const hasOtherSelected = selectedOthers.length > 0;
+                      if (hasOtherSelected) {
+                        handleChange(currentArray.filter((v: any) => typeof v === "string" && otherMultiOptions.includes(v)));
+                      } else {
+                        handleChange([...currentArray, "Other"]);
+                      }
+                    }}
+                    className={cn(
+                      "w-full h-14 rounded-full border-2 text-left px-5 text-base font-medium transition-all duration-200",
+                      selectedOthers.length > 0
+                        ? "border-bluewell-light bg-bluewell-light text-white shadow-sm"
+                        : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-bluewell-light hover:bg-neutral-bg"
+                    )}
+                  >
+                    Other
+                  </button>
                 {selectedOthers.length > 0 && (
                   <input
                     type="text"
@@ -408,7 +408,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
           </div>
         );
       case "compound":
-        // Compound form for Q8 - all optional fields on one screen
+        // Compound form - all optional fields on one screen
         const compoundValue = value || {};
         
         // Compute display values from stored canonical values
@@ -556,10 +556,10 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
                       type="button"
                       onClick={() => handleCompoundChange("gender", opt)}
                       className={cn(
-                        "w-full h-14 rounded-xl border-2 text-left px-5 text-base font-medium transition-all",
+                        "w-full h-14 rounded-full border-2 text-left px-5 text-base font-medium transition-all duration-200",
                         isSelected
-                          ? "border-accent-light bg-accent-soft text-bluewell-royal"
-                          : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-neutral-muted"
+                          ? "border-bluewell-light bg-bluewell-light text-white shadow-sm"
+                          : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-bluewell-light hover:bg-neutral-bg"
                       )}
                     >
                       {opt}
@@ -586,10 +586,10 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
                         handleCompoundChange("foodPreferences", newPrefs);
                       }}
                       className={cn(
-                        "w-full h-14 rounded-xl border-2 text-left px-5 text-base font-medium transition-all",
+                        "w-full h-14 rounded-full border-2 text-left px-5 text-base font-medium transition-all duration-200",
                         isSelected
-                          ? "border-accent-light bg-accent-soft text-bluewell-royal"
-                          : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-neutral-muted"
+                          ? "border-bluewell-light bg-bluewell-light text-white shadow-sm"
+                          : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-bluewell-light hover:bg-neutral-bg"
                       )}
                     >
                       {opt}
@@ -608,10 +608,10 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
                       }
                     }}
                     className={cn(
-                      "w-full h-14 rounded-xl border-2 text-left px-5 text-base font-medium transition-all",
+                      "w-full h-14 rounded-full border-2 text-left px-5 text-base font-medium transition-all duration-200",
                       hasFoodPrefsOther
-                        ? "border-accent-light bg-accent-soft text-bluewell-royal"
-                        : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-neutral-muted"
+                        ? "border-bluewell-light bg-bluewell-light text-white shadow-sm"
+                        : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-bluewell-light hover:bg-neutral-bg"
                     )}
                   >
                     Other
@@ -645,6 +645,111 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
             </div>
           </div>
         );
+      case "fitness-preferences":
+        // Fitness Preferences - Weekly workout target, preferred times, sports & classes
+        const fitnessValue = value || {};
+        
+        const handleFitnessChange = (field: string, fieldValue: any) => {
+          const newValue = { ...fitnessValue, [field]: fieldValue };
+          onChange?.(newValue);
+        };
+
+        // Weekly workout target (slider: 1-7 days)
+        const weeklyTarget = fitnessValue.weeklyTarget || 4;
+        
+        // Preferred times (multi-select)
+        const preferredTimes = Array.isArray(fitnessValue.preferredTimes) ? fitnessValue.preferredTimes : [];
+        const timeOptions = ["Morning", "Afternoon"];
+        
+        // Sports & Classes (multi-select)
+        const sportsClasses = Array.isArray(fitnessValue.sportsClasses) ? fitnessValue.sportsClasses : [];
+        const sportsOptions = ["Yoga", "HIIT", "Running", "Swimming", "Cycling", "Pilates"];
+
+        return (
+          <div className="space-y-8">
+            {/* Weekly workout target */}
+            <div className="space-y-4">
+              <label className="text-base font-semibold text-neutral-dark">Weekly workout target</label>
+              <div className="space-y-3">
+                <div className="text-3xl font-bold text-neutral-dark">{weeklyTarget} days</div>
+                <div className="relative">
+                  <input
+                    type="range"
+                    min={1}
+                    max={7}
+                    value={weeklyTarget}
+                    onChange={(e) => handleFitnessChange("weeklyTarget", Number(e.target.value))}
+                    className="w-full h-2 bg-neutral-surface rounded-full appearance-none cursor-pointer slider"
+                    style={{
+                      background: `linear-gradient(to right, #6CA0DC 0%, #6CA0DC ${((weeklyTarget - 1) / 6) * 100}%, #DDE3EA ${((weeklyTarget - 1) / 6) * 100}%, #DDE3EA 100%)`,
+                    }}
+                  />
+                </div>
+                <div className="text-sm text-neutral-muted text-right">days per week</div>
+              </div>
+            </div>
+
+            {/* Preferred times */}
+            <div className="space-y-4">
+              <label className="text-base font-semibold text-neutral-dark">Preferred times</label>
+              <div className="flex gap-3">
+                {timeOptions.map((time) => {
+                  const isSelected = preferredTimes.includes(time);
+                  return (
+                    <button
+                      key={time}
+                      type="button"
+                      onClick={() => {
+                        const newTimes = isSelected
+                          ? preferredTimes.filter((t: string) => t !== time)
+                          : [...preferredTimes, time];
+                        handleFitnessChange("preferredTimes", newTimes);
+                      }}
+                      className={cn(
+                        "flex-1 h-12 rounded-full border-2 text-sm font-medium transition-all duration-200",
+                        isSelected
+                          ? "border-bluewell-light bg-gradient-to-r from-bluewell-light to-green-400 text-white shadow-sm"
+                          : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-bluewell-light"
+                      )}
+                    >
+                      {time}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Sports & Classes */}
+            <div className="space-y-4">
+              <label className="text-base font-semibold text-neutral-dark">Sports & Classes</label>
+              <div className="grid grid-cols-2 gap-3">
+                {sportsOptions.map((sport) => {
+                  const isSelected = sportsClasses.includes(sport);
+                  return (
+                    <button
+                      key={sport}
+                      type="button"
+                      onClick={() => {
+                        const newSports = isSelected
+                          ? sportsClasses.filter((s: string) => s !== sport)
+                          : [...sportsClasses, sport];
+                        handleFitnessChange("sportsClasses", newSports);
+                      }}
+                      className={cn(
+                        "h-12 rounded-full border-2 text-sm font-medium transition-all duration-200",
+                        isSelected
+                          ? "border-bluewell-light bg-gradient-to-r from-bluewell-light to-green-400 text-white shadow-sm"
+                          : "border-neutral-border bg-neutral-white text-neutral-dark hover:border-bluewell-light"
+                      )}
+                    >
+                      {sport}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
       default:
         return null;
     }
@@ -653,34 +758,47 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
   const hasValue = value !== null && value !== undefined && (typeof value === "number" || value !== "");
   const hasArrayValue = Array.isArray(value) && value.length > 0;
   const hasCompoundValue = question.type === "compound" && value && typeof value === "object" && Object.keys(value).length > 0 && Object.values(value).some((v: any) => v !== null && v !== undefined && v !== "");
-  const isValid = hasValue || hasArrayValue || hasCompoundValue;
+  const hasFitnessPreferences = question.type === "fitness-preferences" && value && typeof value === "object" && (
+    value.weeklyTarget !== undefined ||
+    (Array.isArray(value.preferredTimes) && value.preferredTimes.length > 0) ||
+    (Array.isArray(value.sportsClasses) && value.sportsClasses.length > 0)
+  );
+  const isValid = hasValue || hasArrayValue || hasCompoundValue || hasFitnessPreferences;
 
   return (
-    <Card className="w-full max-w-2xl border-0 shadow-soft">
-      <CardContent className="p-8 space-y-6">
+    <Card className="w-full max-w-lg border-0 shadow-soft">
+      <CardContent className="p-6 space-y-6">
         <div className="space-y-2">
-          <h2 className="text-2xl font-semibold text-neutral-dark leading-tight">
+          <h2 className="text-xl font-semibold text-neutral-dark leading-tight">
             {question.text}
           </h2>
           {question.helperText && (
-            <p className="text-sm text-neutral-muted">{question.helperText}</p>
+            <p className="text-sm text-neutral-muted leading-relaxed">{question.helperText}</p>
           )}
         </div>
         <div className="space-y-4">{renderInput()}</div>
-        <div className="flex flex-col gap-3 pt-4">
+        <div className="flex flex-col gap-3 pt-6">
           <div className="flex justify-between gap-4">
             {canGoBack && (
-              <Button variant="ghost" onClick={onBack} size="lg" className="flex-1">
-                back
+              <Button 
+                variant="ghost" 
+                onClick={onBack} 
+                size="lg" 
+                className="flex-1 rounded-full"
+              >
+                Back
               </Button>
             )}
             <Button
               onClick={onNext}
               disabled={!question.optional && !isValid}
               size="lg"
-              className={cn("flex-1", !canGoBack && "w-full")}
+              className={cn(
+                "flex-1 rounded-full bg-gradient-to-r from-bluewell-light to-bluewell-royal text-white hover:from-bluewell-royal hover:to-bluewell-navy shadow-md hover:shadow-lg transition-all duration-200 border-0",
+                !canGoBack && "w-full"
+              )}
             >
-              {canGoBack ? "next" : "continue"}
+              {canGoBack ? "Next" : "Continue"}
             </Button>
           </div>
           {/* Skip for now - always visible */}
@@ -689,9 +807,9 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
               variant="minimal"
               onClick={onSkip}
               size="md"
-              className="w-full"
+              className="w-full rounded-full"
             >
-              skip for now
+              Skip for now
             </Button>
           )}
         </div>
