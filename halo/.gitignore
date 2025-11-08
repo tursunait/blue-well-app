@@ -1,0 +1,58 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+*.log
+
+# Next.js
+.next/
+out/
+build/
+dist/
+
+# Production
+*.local
+.env*.local
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Misc
+.DS_Store
+*.pem
+.vercel
+.turbo
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Prisma
+prisma/migrations/
+
+# Uploads
+uploads/
+*.jpg
+*.jpeg
+*.png
+*.gif
+
