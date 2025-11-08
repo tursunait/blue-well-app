@@ -21,7 +21,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
     <div className={cn("w-full space-y-3", className)}>
       {showLabel && (
         <div className="flex justify-between text-sm text-neutral-text">
-          <span className="font-medium">question {current} of {total}</span>
+          <span className="font-medium">Q {current} of {total}</span>
           <span className="text-neutral-muted">{Math.round(percentage)}%</span>
         </div>
       )}

@@ -3,7 +3,7 @@ import { z } from "zod";
 // Survey schemas
 export const SurveyQuestion = z.object({
   id: z.string(),
-  type: z.enum(["text", "number", "select", "multi", "slider", "height", "weight"]),
+  type: z.enum(["text", "number", "select", "multi", "slider", "height", "weight", "compound"]),
   text: z.string(),
   options: z.array(z.string()).optional(),
   min: z.number().optional(),

@@ -22,6 +22,7 @@ h1, h2, h3, h4, h5, h6 {
   @apply text-neutral-dark font-semibold;
   letter-spacing: -0.01em;
 }
+}
 
 /* Slider styling */
 input[type="range"].slider {
