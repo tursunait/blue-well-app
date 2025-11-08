@@ -11,16 +11,37 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  name         String?
-  image        String?
-  createdAt    DateTime @default(now())
-  profile      Profile?
-  integrations Integration?
-  surveyAnswers SurveyAnswer[]
-  mealLogs     MealLog[]
+  id              String   @id @default(cuid())
+  email           String   @unique
+  name            String?
+  image           String?
+  createdAt       DateTime @default(now())
+  // Survey-derived profile (all optional)
+  gender          String?
+  age             Int?
+  heightCm        Float?
+  weightKg        Float?
+  fitnessGoal     FitnessGoal?
+  reminderPref    ReminderPref?
+  scheduleCons    Int?      // 1..5
+  mealRegular     Int?      // 1..5
+  weeklyActivity  Int?      // 1..4
+  timeBudgetMin   Int?      // bucket: 10, 20, 40, 60+
+  dietPrefs       String[]  @default([])
+  avoidFoods      String[]  @default([])
+  googleCalConnected Boolean @default(false)
+  myRecConnected     Boolean @default(false)
+  profile         Profile?
+  integrations    Integration?
+  surveyAnswers   SurveyAnswer[]
+  foodLogs        FoodLog[]
+  activityLogs    ActivityLog[]
+  recommendations Recommendation[]
+  mealLogs        MealLog[] // legacy
 }
+
+enum FitnessGoal { LOSE_FAT MAINTAIN GAIN_MUSCLE FITNESS ATHLETIC UNKNOWN }
+enum ReminderPref { LIGHT BALANCED DAILY NONE }
 
 model Profile {
   id             String   @id @default(cuid())
@@ -58,9 +79,11 @@ model SurveyAnswer {
   id         String   @id @default(cuid())
   userId     String
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  surveyId   String
   questionId String
-  answerJson Json
+  value      Json
+  tsISO      DateTime @default(now())
+  surveyId   String?  // optional for backward compatibility
+  answerJson Json?    // optional for backward compatibility
   createdAt  DateTime @default(now())
   @@index([userId, surveyId])
 }
@@ -76,6 +99,86 @@ model MealLog {
   createdAt  DateTime @default(now())
   source     String    // "photo" | "manual"
   @@index([userId, createdAt])
+}
+
+model MenuVendor {
+  id        String   @id @default(cuid())
+  name      String
+  source    String   // "DUKE_DINING" | "UBER_EATS" | "DOORDASH" | "GRUBHUB" | "CAMPUS"
+  campusLoc String?
+  url       String?
+  items     MenuItem[]
+  @@index([name])
+}
+
+model MenuItem {
+  id         String   @id @default(cuid())
+  vendorId   String
+  vendor     MenuVendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  name       String
+  normalized String   // lowercased, de-punctuated
+  description String?
+  calories   Int?
+  proteinG   Float?
+  carbsG     Float?
+  fatG       Float?
+  priceUSD   Float?
+  tags       String[] @default([])
+  embedding  Bytes?
+  updatedAt  DateTime @default(now())
+  @@unique([vendorId, normalized])
+}
+
+model FitnessClass {
+  id        String   @id @default(cuid())
+  title     String
+  startTime DateTime
+  endTime   DateTime
+  location  String?
+  intensity String? // low/med/high
+  url       String?
+  source    String   // "DUKE_REC"
+  updatedAt DateTime @default(now())
+  @@index([startTime])
+}
+
+model FoodLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ts        DateTime @default(now())
+  source    String   // "PHOTO_AI" | "MANUAL" | "MENU_PICK"
+  itemName  String
+  calories  Int
+  proteinG  Float?
+  carbsG    Float?
+  fatG      Float?
+  notes     String?
+  @@index([userId, ts])
+}
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ts         DateTime @default(now())
+  source     String   // "GOOGLE_CAL" | "DUKE_REC" | "MANUAL"
+  activity   String   // "Yoga", "Run", "Strength"
+  durationMin Int?
+  intensity  String?
+  kcalBurn   Int?
+  @@index([userId, ts])
+}
+
+model Recommendation {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime @default(now())
+  scope     String   // "TODAY" | "NEXT_6_HOURS" | "WEEK"
+  payload   Json
+  rationale String?
+  @@index([userId, date])
 }
 
 model ClassSlot {
