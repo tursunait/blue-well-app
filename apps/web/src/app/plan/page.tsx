@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { Card, CardContent, Button } from "@halo/ui";
 
 interface TodayPlan {
@@ -69,7 +70,19 @@ export default function PlanPage() {
         setTodayPlan(today);
       } else {
         const errorData = await todayRes.json().catch(() => ({}));
-        setError(errorData.error || "Failed to load today's plan");
+        console.error("Plan API error:", {
+          status: todayRes.status,
+          statusText: todayRes.statusText,
+          error: errorData
+        });
+        if (todayRes.status === 401) {
+          setError("Please sign in to view your plan. Click the button below to sign in.");
+        } else if (errorData.requiresOnboarding) {
+          setError("Please complete the onboarding survey to generate your personalized plan. Click the button below to start onboarding.");
+        } else {
+          const errorMsg = errorData.details || errorData.error || "Failed to load today's plan. Please try again.";
+          setError(errorMsg + (errorData.details ? ` (Details: ${errorData.details})` : ""));
+        }
       }
 
       // Load weekly plan
@@ -110,10 +123,20 @@ export default function PlanPage() {
   return (
     <div className="min-h-screen bg-neutral-bg pb-24">
       <div className="mx-auto max-w-2xl space-y-6 p-6">
-        {/* Header */}
+        {/* Header with Logo */}
         <div className="pt-8 space-y-2">
-          <h1 className="text-3xl font-semibold text-neutral-dark">Your Plan</h1>
-          <p className="text-base text-neutral-text">
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <Image
+              src="/img/logo_icon.png"
+              alt="BlueWell"
+              width={40}
+              height={40}
+              className="object-contain"
+              priority
+            />
+            <h1 className="text-3xl font-semibold text-neutral-dark">Your Plan</h1>
+          </div>
+          <p className="text-base text-neutral-text text-center">
             Personalized wellness plan based on your goals
           </p>
         </div>
@@ -121,16 +144,38 @@ export default function PlanPage() {
         {/* Error State */}
         {error && (
           <Card className="border-0 shadow-soft border-red-200 bg-red-50">
-            <CardContent className="p-6">
+            <CardContent className="p-6 space-y-3">
               <p className="text-sm text-red-600">{error}</p>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={loadPlans}
-                className="mt-3"
-              >
-                Retry
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={loadPlans}
+                  className="mt-3"
+                >
+                  Retry
+                </Button>
+                {error.includes("sign in") && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => window.location.href = "/api/auth/signin"}
+                    className="mt-3"
+                  >
+                    Sign In
+                  </Button>
+                )}
+                {error.includes("onboarding") && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => window.location.href = "/onboarding"}
+                    className="mt-3"
+                  >
+                    Go to Onboarding
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
         )}

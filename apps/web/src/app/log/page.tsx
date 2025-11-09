@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
+import Image from "next/image";
 import { FitnessGoalCard, AutoDetectedMeal } from "@halo/ui";
 import { Camera, PenSquare } from "lucide-react";
 import { estimateCalories, estimateCaloriesFromText, type CalorieEstimateResponse } from "@/lib/api";
@@ -11,34 +12,8 @@ export default function LogPage() {
   // Get nutrition data from context
   const { caloriesConsumed, caloriesGoal, proteinConsumed, proteinGoal, loggedMeals, addMeal } = useNutrition();
 
-  const [stats, setStats] = useState<{
-    calories: { consumed: number; goal: number; remaining: number; burned: number };
-    protein: { consumed: number; goal: number; remaining: number };
-    steps: { current: number; goal: number; remaining: number };
-  } | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadStats();
-  }, []);
-
-  const loadStats = async () => {
-    try {
-      const res = await fetch("/api/stats/today");
-      if (res.ok) {
-        const data = await res.json();
-        setStats(data);
-      }
-    } catch (error) {
-      console.error("Error loading stats:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Steps data - use API data or defaults
-  const stepsCurrent = stats?.steps.current || 0;
-  const stepsGoal = stats?.steps.goal || 10000;
+  const stepsCurrent = 8500;
+  const stepsGoal = 10000;
 
   // File input ref
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -68,42 +43,22 @@ export default function LogPage() {
   // Calculated values for display
   const caloriesRemaining = caloriesGoal - caloriesConsumed; // Still calculate for summary
 
-  const handleConfirm = async () => {
-    if (!detectedMeal) return;
+  const handleConfirm = () => {
+    if (detectedMeal) {
+      console.log("Meal confirmed:", detectedMeal);
 
-    try {
-      // Try to log to API if available
-      const res = await fetch("/api/log/meal", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          itemName: detectedMeal.name,
-          calories: detectedMeal.calories,
-          proteinG: detectedMeal.protein,
-          carbsG: detectedMeal.carbs,
-          fatG: detectedMeal.fat,
-          source: "PHOTO_AI",
-        }),
+      // Add meal using context
+      addMeal({
+        name: detectedMeal.name,
+        calories: detectedMeal.calories,
+        protein: detectedMeal.protein,
+        carbs: detectedMeal.carbs,
+        fat: detectedMeal.fat,
       });
 
-      if (res.ok) {
-        loadStats(); // Refresh stats from API
-      }
-    } catch (error) {
-      console.error("Error confirming meal via API:", error);
+      // Clear the detected meal
+      setDetectedMeal(null);
     }
-
-    // Always add meal to context for immediate UI update
-    addMeal({
-      name: detectedMeal.name,
-      calories: detectedMeal.calories,
-      protein: detectedMeal.protein,
-      carbs: detectedMeal.carbs,
-      fat: detectedMeal.fat,
-    });
-
-    // Clear the detected meal
-    setDetectedMeal(null);
   };
 
   const handleEdit = () => {
@@ -223,9 +178,19 @@ export default function LogPage() {
           multiple={false}
         />
 
-        {/* Header */}
+        {/* Header with Logo */}
         <div className="pt-8">
-          <h1 className="text-3xl font-semibold text-neutral-dark">Log Meal</h1>
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <Image
+              src="/img/logo_icon.png"
+              alt="BlueWell"
+              width={40}
+              height={40}
+              className="object-contain"
+              priority
+            />
+            <h1 className="text-3xl font-semibold text-neutral-dark">Log Meal</h1>
+          </div>
         </div>
 
         {/* Fitness Goals Section */}
@@ -242,8 +207,8 @@ export default function LogPage() {
               type="steps"
               current={stepsCurrent}
               goal={stepsGoal}
-              title="Steps Today"
-              subtitle=""
+              title="Lose Weight"
+              subtitle="Steps:"
             />
             <FitnessGoalCard
               type="protein"

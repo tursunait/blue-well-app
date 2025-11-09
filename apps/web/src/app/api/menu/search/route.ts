@@ -42,12 +42,17 @@ export async function GET(request: NextRequest) {
     });
     
     // Filter by diet preferences and avoid list
+    // Parse tags from JSON string (SQLite compatibility)
+    const { parseJsonArray } = await import("@/lib/sqlite-utils");
+    
     if (dietPrefs.length > 0 || avoid.length > 0) {
       items = items.filter((item) => {
+        const itemTags = parseJsonArray<string>(item.tags);
+        
         // Check diet preferences (tags must include at least one)
         if (dietPrefs.length > 0) {
           const hasDietPref = dietPrefs.some((pref) =>
-            item.tags.some((tag) => tag.toLowerCase().includes(pref.toLowerCase()))
+            itemTags.some((tag) => tag.toLowerCase().includes(pref.toLowerCase()))
           );
           if (!hasDietPref) return false;
         }
@@ -55,7 +60,7 @@ export async function GET(request: NextRequest) {
         // Check avoid list (name and tags must not contain any)
         if (avoid.length > 0) {
           const nameLower = item.name.toLowerCase();
-          const tagsLower = item.tags.map((t) => t.toLowerCase()).join(" ");
+          const tagsLower = itemTags.map((t) => t.toLowerCase()).join(" ");
           const hasAvoided = avoid.some((a) =>
             nameLower.includes(a.toLowerCase()) || tagsLower.includes(a.toLowerCase())
           );

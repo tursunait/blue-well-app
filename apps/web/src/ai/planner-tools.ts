@@ -60,11 +60,14 @@ export async function getUserContext(userId: string) {
     proteinTarget = Math.round(user.weightKg * proteinPerKg);
   }
   
+  // Parse JSON strings to arrays for SQLite compatibility
+  const { parseJsonArray } = await import("@/lib/sqlite-utils");
+  
   return {
     calorieBudget,
     proteinTarget,
-    dietPrefs: user.dietPrefs || [],
-    avoidFoods: user.avoidFoods || [],
+    dietPrefs: parseJsonArray<string>(user.dietPrefs),
+    avoidFoods: parseJsonArray<string>(user.avoidFoods),
     timeBudgetMin: user.timeBudgetMin || 20,
     weeklyActivity: user.weeklyActivity || 2,
     fitnessGoal: user.fitnessGoal,
@@ -101,12 +104,16 @@ export async function searchMenuItems(options: {
   });
   
   // Filter by diet preferences
+  // Parse tags from JSON string (SQLite compatibility)
+  const { parseJsonArray } = await import("@/lib/sqlite-utils");
+  
   if (options.dietPrefs && options.dietPrefs.length > 0) {
-    items = items.filter((item) =>
-      options.dietPrefs!.some((pref) =>
-        item.tags.some((tag) => tag.toLowerCase().includes(pref.toLowerCase()))
-      )
-    );
+    items = items.filter((item) => {
+      const itemTags = parseJsonArray<string>(item.tags);
+      return options.dietPrefs!.some((pref) =>
+        itemTags.some((tag) => tag.toLowerCase().includes(pref.toLowerCase()))
+      );
+    });
   }
   
   // Rank by semantic similarity if query provided
@@ -140,7 +147,7 @@ export async function searchMenuItems(options: {
     carbsG: item.carbsG,
     fatG: item.fatG,
     priceUSD: item.priceUSD,
-    tags: item.tags,
+    tags: parseJsonArray<string>(item.tags),
   }));
 }
 

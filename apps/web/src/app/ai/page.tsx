@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { ChatBubble } from "@halo/ui";
 import { chatRequest, addCalendarEvent } from "@/lib/api";
@@ -91,9 +92,19 @@ export default function AIPage() {
 
   return (
     <div className="flex h-screen flex-col bg-neutral-bg pb-24">
-      {/* Header */}
+      {/* Header with Logo */}
       <div className="border-b border-neutral-border bg-neutral-white px-6 py-4">
-        <h1 className="text-xl font-semibold text-neutral-dark">AI Assistant</h1>
+        <div className="flex items-center gap-3 mb-2">
+          <Image
+            src="/img/logo_icon.png"
+            alt="BlueWell"
+            width={32}
+            height={32}
+            className="object-contain"
+            priority
+          />
+          <h1 className="text-xl font-semibold text-neutral-dark">AI Assistant</h1>
+        </div>
         <p className="text-sm text-neutral-muted mt-1">
           Ask me anything about workouts, meals, classes, or your daily plan
         </p>

@@ -101,8 +101,8 @@ export async function POST(request: NextRequest) {
         mealRegular: mealRegularity,
         weeklyActivity: weeklyActivity,
         timeBudgetMin: timeBudgetMin,
-        dietPrefs: dietPrefs || [],
-        avoidFoods: avoidFoods || [],
+        dietPrefs: dietPrefs && dietPrefs.length > 0 ? JSON.stringify(dietPrefs) : null,
+        avoidFoods: avoidFoods && avoidFoods.length > 0 ? JSON.stringify(avoidFoods) : null,
       },
     });
     
@@ -116,13 +116,13 @@ export async function POST(request: NextRequest) {
             id: `${user.id}_${questionId}`, // This won't work with current schema, need to adjust
           },
           update: {
-            value: value as any,
+            value: typeof value === 'string' ? value : JSON.stringify(value),
             tsISO: new Date(),
           },
           create: {
             userId: user.id,
             questionId,
-            value: value as any,
+            value: typeof value === 'string' ? value : JSON.stringify(value),
             tsISO: new Date(),
           },
         }).catch(() => {
@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
             data: {
               userId: user.id,
               questionId,
-              value: value as any,
+              value: typeof value === 'string' ? value : JSON.stringify(value),
               tsISO: new Date(),
             },
           });

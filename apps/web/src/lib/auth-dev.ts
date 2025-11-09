@@ -31,42 +31,43 @@ export async function getDevUser(): Promise<string> {
     });
 
     if (!user) {
-      // Create test user if it doesn't exist
+      // Create test user if it doesn't exist (without legacy profile/integration relations)
       user = await prisma.user.create({
         data: {
           email: "test@halo.com",
           name: "Test User",
-          profile: {
-            create: {
-              age: 30,
-              gender: "Other",
-              heightCm: 175,
-              weightKg: 70,
-              units: "metric",
-              primaryGoal: "General fitness",
-              weeklyWorkouts: 3,
-              dietPrefs: ["Vegetarian"],
-              allergies: [],
-              budgetWeekly: 100,
-              timePrefs: ["morning", "evening"],
-            },
-          },
-          integrations: {
-            create: {
-              gcalConnected: false,
-              myrecConnected: false,
-            },
-          },
+          age: 30,
+          gender: "Other",
+          heightCm: 175,
+          weightKg: 70,
+          fitnessGoal: "FITNESS",
+          weeklyActivity: 3,
+          dietPrefs: JSON.stringify(["Vegetarian"]),
+          avoidFoods: null,
         },
       });
+      console.log("Created test user:", user.id);
+    } else {
+      console.log("Found existing test user:", user.id);
     }
 
     mockUserId = user.id;
     return user.id;
   } catch (error) {
     console.error("Error getting dev user:", error);
-    // Fallback to a hardcoded ID if DB fails
-    return "dev-user-id";
+    // Try to find any user as fallback
+    try {
+      const anyUser = await prisma.user.findFirst();
+      if (anyUser) {
+        console.log("Using fallback user:", anyUser.id);
+        mockUserId = anyUser.id;
+        return anyUser.id;
+      }
+    } catch (fallbackError) {
+      console.error("Fallback user lookup failed:", fallbackError);
+    }
+    // Last resort: return a hardcoded ID (will fail if user doesn't exist, but better than nothing)
+    throw new Error("Could not get or create dev user. Check database connection.");
   }
 }
 
