@@ -58,6 +58,16 @@ A schedule-aware AI wellness coach for busy people. Built with Next.js, FastAPI,
    This will start:
    - Next.js web app: http://localhost:3000
    - FastAPI backend: http://localhost:8000
+   - Calorie Estimator API (run separately): see below
+
+6. **Start the Calorie Estimator API** (needed for meal logging):
+   ```bash
+   pnpm dev:calorie
+   # or
+   cd apps/calorie-estimator-api
+   uvicorn app.main:app --reload
+   ```
+   The service listens on http://localhost:8000 by default. Ensure `NEXT_PUBLIC_CALORIE_ESTIMATOR_URL` in `apps/web/.env.local` points to the same host and port.
 
 ### Individual Commands
 
@@ -87,7 +97,8 @@ pnpm --filter web prisma generate
 │   │   │   ├── lib/      # Utilities
 │   │   │   └── components/
 │   │   └── prisma/       # Database schema
-│   └── api/              # FastAPI service
+│   ├── api/              # FastAPI service
+│   └── calorie-estimator-api/  # Photo-based calorie estimation service (FastAPI)
 │       ├── routers/      # API routes
 │       └── services/     # Business logic
 ├── packages/
@@ -159,4 +170,3 @@ Replace these with real implementations as needed.
 ## 📄 License
 
 MIT
-

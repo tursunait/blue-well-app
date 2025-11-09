@@ -8,32 +8,31 @@ The log page now integrates with the calorie-estimator-api to automatically dete
 
 ## Prerequisites
 
-1. **Calorie Estimator API** running at `/Users/msyzdykova/calorie-estimator-api`
-2. **Blue Well App** at `/Users/msyzdykova/blue-well-app`
-3. OpenAI API key configured in the calorie-estimator-api
+1. **Calorie Estimator API** checked into `apps/calorie-estimator-api/`
+2. **Blue Well App** at the repo root
+3. OpenAI (or Gemini) API key configured in the calorie-estimator API `.env`
 
 ## Setup Instructions
 
 ### 1. Start the Calorie Estimator API
 
 ```bash
-cd /Users/msyzdykova/calorie-estimator-api
-
-# Activate virtual environment
-source venv/bin/activate
+cd apps/calorie-estimator-api
 
 # Ensure .env file has your OpenAI API key
 # OPENAI_API_KEY=your-key-here
 
 # Start the API server
-python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+# or run from the project root
+# pnpm dev:calorie
 ```
 
 The API will be available at `http://localhost:8000`
 
 ### 2. Configure Blue Well App
 
-The environment variables are already set up in `/Users/msyzdykova/blue-well-app/apps/web/.env.local`:
+The environment variables live in `apps/web/.env.local`:
 
 ```env
 NEXT_PUBLIC_CALORIE_ESTIMATOR_URL=http://localhost:8000
@@ -42,13 +41,8 @@ NEXT_PUBLIC_CALORIE_ESTIMATOR_URL=http://localhost:8000
 ### 3. Start the Blue Well App
 
 ```bash
-cd /Users/msyzdykova/blue-well-app
-
-# Install dependencies if needed
-npm install
-
-# Start the development server
-npm run dev
+pnpm install   # first time only
+pnpm dev
 ```
 
 The app will be available at `http://localhost:3000`
@@ -91,7 +85,7 @@ The app will be available at `http://localhost:3000`
 - Implemented loading and error states
 
 ### 3. `/apps/web/.env.local`
-- Created with `NEXT_PUBLIC_CALORIE_ESTIMATOR_URL` configuration
+- Stores `NEXT_PUBLIC_CALORIE_ESTIMATOR_URL`
 
 ### 4. `/apps/web/.env.local.example`
 - Updated with calorie estimator URL example
