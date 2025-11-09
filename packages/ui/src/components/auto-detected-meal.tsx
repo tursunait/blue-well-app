@@ -79,9 +79,17 @@ export const AutoDetectedMeal: React.FC<AutoDetectedMealProps> = ({
             {/* Action Buttons */}
             <div className="flex gap-2 pt-2">
               <Button
-                onClick={onConfirm}
+                onClick={() => {
+                  console.log("[AutoDetectedMeal] Confirm button clicked, onConfirm:", onConfirm);
+                  if (onConfirm) {
+                    onConfirm();
+                  } else {
+                    console.error("[AutoDetectedMeal] onConfirm handler is not provided!");
+                  }
+                }}
                 size="sm"
                 className="flex-1 rounded-full bg-green-500 text-white hover:bg-green-600 border-0"
+                disabled={!onConfirm}
               >
                 <Check className="h-4 w-4 mr-1" />
                 Confirm

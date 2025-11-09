@@ -166,12 +166,18 @@ export default function HomePage() {
     if (!isoString) return "";
     try {
       const date = new Date(isoString);
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        console.warn(`[formatTime] Invalid date string: ${isoString}`);
+        return "";
+      }
       return date.toLocaleTimeString("en-US", {
         hour: "numeric",
         minute: "2-digit",
         hour12: true,
       });
-    } catch {
+    } catch (error) {
+      console.warn(`[formatTime] Error parsing date: ${isoString}`, error);
       return "";
     }
   };
@@ -322,52 +328,6 @@ export default function HomePage() {
               </div>
             ) : (
               <div className="text-sm text-neutral-muted">No meals planned yet.</div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 shadow-soft">
-          <CardContent className="p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-neutral-dark">Workouts</h2>
-            </div>
-            {planLoading ? (
-              <div className="text-sm text-neutral-muted">Loading workouts...</div>
-            ) : plan && plan.workouts.length > 0 ? (
-              <div className="space-y-3">
-                {plan.workouts.map((workout) => (
-                  <div
-                    key={workout.id}
-                    className="p-4 rounded-xl border border-neutral-border bg-neutral-white"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-neutral-dark">
-                        {workout.title}
-                      </span>
-                      {workout.start_time && (
-                        <span className="text-xs text-neutral-muted">
-                          {formatTime(workout.start_time)}
-                        </span>
-                      )}
-                    </div>
-                    {workout.location && (
-                      <div className="text-xs text-neutral-muted mt-1">
-                        {workout.location}
-                      </div>
-                    )}
-                    {workout.intensity && (
-                      <div className="text-xs text-neutral-muted mt-1">
-                        Intensity: {workout.intensity}
-                      </div>
-                    )}
-                    {workout.note && (
-                      <div className="text-xs text-neutral-muted mt-2">{workout.note}</div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-sm text-neutral-muted">No workouts scheduled.</div>
             )}
           </CardContent>
         </Card>

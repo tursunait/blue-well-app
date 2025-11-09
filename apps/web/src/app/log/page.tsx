@@ -123,11 +123,28 @@ export default function LogPage() {
   const caloriesRemaining = caloriesGoal - caloriesConsumed; // Still calculate for summary
 
   const handleConfirm = async () => {
-    if (detectedMeal) {
-      console.log("Meal confirmed:", detectedMeal);
+    console.log("[handleConfirm] Called, detectedMeal:", detectedMeal);
+    
+    if (!detectedMeal) {
+      console.error("[handleConfirm] No detected meal to confirm!");
+      alert("No meal detected. Please take a photo or enter a meal manually.");
+      return;
+    }
+    
+    console.log("[handleConfirm] Meal confirmed:", detectedMeal);
 
-      try {
+    try {
+      setIsLoading(true);
+        
         // Save meal to database via API
+        console.log("[handleConfirm] Sending request with data:", {
+          itemName: detectedMeal.name,
+          calories: detectedMeal.calories,
+          proteinG: detectedMeal.protein,
+          carbsG: detectedMeal.carbs,
+          fatG: detectedMeal.fat,
+        });
+        
         const response = await fetch("/api/log/meal", {
           method: "POST",
           headers: {
@@ -141,14 +158,41 @@ export default function LogPage() {
             fatG: detectedMeal.fat,
             source: "PHOTO",
           }),
+        }).catch((fetchError) => {
+          console.error("[handleConfirm] Fetch error (network/connection):", fetchError);
+          throw new Error(`Network error: ${fetchError.message}`);
         });
 
+        console.log("[handleConfirm] Response status:", response.status, response.statusText);
+
         if (!response.ok) {
-          throw new Error("Failed to log meal");
+          let errorData: any = {};
+          const contentType = response.headers.get("content-type");
+          
+          if (contentType && contentType.includes("application/json")) {
+            try {
+              errorData = await response.json();
+            } catch (e) {
+              console.error("[handleConfirm] Failed to parse error JSON:", e);
+            }
+          } else {
+            const text = await response.text().catch(() => "");
+            console.error("[handleConfirm] Non-JSON error response:", text);
+            errorData = { error: text || `HTTP ${response.status}: ${response.statusText}` };
+          }
+          
+          const errorMessage = errorData.error || errorData.details || errorData.message || `Server error: ${response.status}`;
+          console.error("[handleConfirm] API error details:", {
+            status: response.status,
+            statusText: response.statusText,
+            errorData,
+            errorMessage,
+          });
+          throw new Error(errorMessage);
         }
 
         const data = await response.json();
-        console.log("Meal logged successfully:", data);
+        console.log("[handleConfirm] Meal logged successfully:", data);
 
         // Also add to context for immediate UI update
         addMeal({
@@ -163,13 +207,28 @@ export default function LogPage() {
         setDetectedMeal(null);
 
         // Refresh stats and food logs immediately to reflect the new totals
-        loadStats();
-        loadFoodLogs();
+        // Small delay to ensure database write is complete
+        setTimeout(() => {
+          loadStats();
+          loadFoodLogs();
+        }, 100);
       } catch (error) {
-        console.error("Error logging meal:", error);
-        alert("Failed to log meal. Please try again.");
+        console.error("[handleConfirm] Error logging meal:", error);
+        let errorMessage = "Failed to log meal. Please try again.";
+        
+        if (error instanceof TypeError && error.message.includes("fetch")) {
+          errorMessage = "Network error: Unable to connect to server. Please check if the server is running.";
+        } else if (error instanceof Error) {
+          errorMessage = error.message;
+        } else if (typeof error === "string") {
+          errorMessage = error;
+        }
+        
+        console.error("[handleConfirm] Final error message:", errorMessage);
+        alert(`Failed to log meal: ${errorMessage}`);
+      } finally {
+        setIsLoading(false);
       }
-    }
   };
 
   const handleEdit = () => {

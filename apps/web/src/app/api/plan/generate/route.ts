@@ -123,7 +123,7 @@ async function loadDiningItems(userId: string, dietPrefs: string[], avoidFoods: 
       proteinG: { not: null },
     },
     include: { vendor: true },
-    take: 60,
+    // Remove limit - use ALL available items for maximum variety
   });
 
   console.log(`[loadDiningItems] Found ${baseItems.length} base items with nutrition data (from ${vendorIds.length} vendors)`);
@@ -145,8 +145,12 @@ async function loadDiningItems(userId: string, dietPrefs: string[], avoidFoods: 
       });
     });
     
-    // If diet filter removed everything, warn but use baseItems
-    if (filteredByDiet.length === 0 && baseItems.length > 0) {
+    // CRITICAL: If diet filter results in fewer than 4 items, use baseItems to ensure variety
+    // We need at least 4 different items for breakfast, lunch, dinner, and snack
+    if (filteredByDiet.length < 4 && baseItems.length >= 4) {
+      console.warn(`[loadDiningItems] Diet filter only found ${filteredByDiet.length} items (need at least 4). Using baseItems for variety. Prefs: ${JSON.stringify(dietPrefs)}`);
+      filteredByDiet = baseItems;
+    } else if (filteredByDiet.length === 0 && baseItems.length > 0) {
       console.warn(`[loadDiningItems] Diet filter removed all items. Using baseItems instead. Prefs: ${JSON.stringify(dietPrefs)}`);
       filteredByDiet = baseItems;
     }
@@ -163,10 +167,11 @@ async function loadDiningItems(userId: string, dietPrefs: string[], avoidFoods: 
 
   console.log(`[loadDiningItems] After avoid foods filter (${avoidFoods.length} foods): ${finalItems.length} items`);
 
-  // Always return baseItems if finalItems is empty (to ensure we have something to work with)
-  // Return more items (at least 40) to give AI enough variety for 4 different meals
-  const result = (finalItems.length > 0 ? finalItems : baseItems).slice(0, 60);
-  console.log(`[loadDiningItems] Returning ${result.length} items for plan generation`);
+  // CRITICAL: If we don't have at least 4 items after all filtering, use baseItems
+  // This ensures we can always generate 4 different meals
+  // Use ALL items - no limit to give AI maximum variety
+  const result = finalItems.length >= 4 ? finalItems : baseItems;
+  console.log(`[loadDiningItems] Returning ${result.length} items for plan generation (${finalItems.length >= 4 ? 'using filtered' : 'using baseItems for variety'})`);
 
   return result.map((item: typeof baseItems[0]) => ({
     id: item.id,
@@ -234,13 +239,16 @@ function buildPlanPrompt({
         "You must ONLY use the provided dining_items and rec_classes IDs in your response.",
         "CRITICAL: You must generate exactly 4 meals: breakfast, lunch, dinner, and snack.",
         "CRITICAL: Each meal MUST use a DIFFERENT item ID from the dining_items list. Do NOT repeat the same item ID.",
+        "CRITICAL: Prioritize VARIETY - select meals from DIFFERENT vendors/restaurants when possible to provide diverse options.",
+        "CRITICAL: Each meal should be from a different item to ensure variety in the user's daily plan.",
         "All meals MUST come from the provided dining_items list (Duke Dining vendors).",
-        "Respect the user's dietary preferences and avoid foods from their onboarding survey.",
+        "Respect the user's dietary preferences and avoid foods from their onboarding survey, but prioritize variety over strict matching if needed.",
         "Select appropriate items for each meal type: breakfast items for breakfast, lunch items for lunch, etc.",
         "Respect dietary restrictions, allergies, and time availability.",
         "Distribute calories appropriately: breakfast ~25%, lunch ~35%, dinner ~30%, snack ~10%.",
-        "Provide suggestions, not prescriptions. Avoid medical language.",
         "Keep total calories within ±500 kcal of the provided target. Protein should support the goal.",
+        "VARIETY IS ESSENTIAL: Look through ALL available options and select diverse meals from different vendors.",
+        "Provide suggestions, not prescriptions. Avoid medical language.",
         "If insufficient information, suggest requesting more detail instead of inventing items.",
         "Output strict JSON with keys {\"meals\": [...], \"workouts\": [...]}.",
         "For each meal, include the referenced `id`, `time` (HH:MM format), and optional `portion_note`.",
@@ -265,7 +273,7 @@ function buildPlanPrompt({
             snack: "14:00-16:00 or 20:30-22:00"
           },
           tone: "Supportive and gentle",
-          note: "Must include exactly 4 meals: breakfast, lunch, dinner, and snack. Each meal must use a DIFFERENT item ID from the dining_items list. Do NOT repeat the same item for multiple meals.",
+          note: "Must include exactly 4 meals: breakfast, lunch, dinner, and snack. Each meal must use a DIFFERENT item ID from the dining_items list. Do NOT repeat the same item for multiple meals. Prioritize VARIETY - select meals from DIFFERENT vendors when possible. Look through ALL available options to find diverse meals that fit the calorie budget.",
         },
         schema: {
           meals: [{ id: "string", time: "HH:MM", portion_note: "optional string" }],
@@ -311,6 +319,7 @@ function buildFallbackPlan(
   ];
 
   // Select items that best match calorie targets for each meal
+  // CRITICAL: Ensure we always select 4 DIFFERENT items
   const selectedMeals: Array<{
     id: string;
     item: string;
@@ -322,30 +331,64 @@ function buildFallbackPlan(
   }> = [];
 
   let usedIndices = new Set<number>();
+  let usedItemIds = new Set<string>(); // Track by ID to prevent duplicates even if indices differ
+  let usedVendors = new Set<string>(); // Track vendors to prioritize variety
+  
+  // Shuffle dining items to ensure variety (Fisher-Yates shuffle)
+  const shuffledItems = [...diningItems];
+  for (let i = shuffledItems.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffledItems[i], shuffledItems[j]] = [shuffledItems[j], shuffledItems[i]];
+  }
   
   for (let mealIndex = 0; mealIndex < 4; mealIndex++) {
     const targetCal = mealCalorieTargets[mealIndex];
     const targetProtein = mealProteinTargets[mealIndex];
     
-    // Find best matching item (closest to target calories)
-    let bestMatch: { item: typeof diningItems[0]; index: number } | null = null;
-    let bestDiff = Infinity;
+    // Find best matching items (closest to target calories) that haven't been used
+    // Prioritize items from different vendors for variety
+    const candidates: Array<{ item: typeof diningItems[0]; index: number; diff: number; vendorBonus: number }> = [];
     
-    for (let i = 0; i < diningItems.length; i++) {
-      if (usedIndices.has(i)) continue;
+    for (let i = 0; i < shuffledItems.length; i++) {
+      const originalIndex = diningItems.findIndex(di => di.id === shuffledItems[i].id);
+      // Skip if index already used OR if item ID already used
+      if (usedIndices.has(originalIndex) || usedItemIds.has(shuffledItems[i].id)) continue;
       
-      const item = diningItems[i];
+      const item = shuffledItems[i];
       const itemCal = item.calories || 0;
       const diff = Math.abs(itemCal - targetCal);
       
-      if (diff < bestDiff) {
-        bestDiff = diff;
-        bestMatch = { item, index: i };
+      // Give bonus points for using a different vendor (lower score = better)
+      const vendorBonus = usedVendors.has(item.restaurant) ? 200 : 0; // Penalty for same vendor
+      
+      candidates.push({ item, index: originalIndex, diff: diff + vendorBonus, vendorBonus });
+    }
+    
+    // Sort by combined score (calorie difference + vendor penalty)
+    candidates.sort((a, b) => a.diff - b.diff);
+    
+    // Take top 5 candidates (more variety), then randomly pick one
+    const topCandidates = candidates.slice(0, Math.min(5, candidates.length));
+    
+    let bestMatch: { item: typeof diningItems[0]; index: number } | null = null;
+    
+    if (topCandidates.length > 0) {
+      // Randomly select from top candidates for variety
+      const selected = topCandidates[Math.floor(Math.random() * topCandidates.length)];
+      bestMatch = { item: selected.item, index: selected.index };
+    } else {
+      // If no candidates found, just pick the first unused item
+      for (let i = 0; i < diningItems.length; i++) {
+        if (usedIndices.has(i) || usedItemIds.has(diningItems[i].id)) continue;
+        bestMatch = { item: diningItems[i], index: i };
+        break;
       }
     }
     
     if (bestMatch) {
       usedIndices.add(bestMatch.index);
+      usedItemIds.add(bestMatch.item.id); // Track by ID
+      usedVendors.add(bestMatch.item.restaurant); // Track vendor
       const mealType = mealIndex === 0 ? "Breakfast" : mealIndex === 1 ? "Lunch" : mealIndex === 2 ? "Dinner" : "Snack";
       selectedMeals.push({
         id: bestMatch.item.id,
@@ -356,13 +399,17 @@ function buildFallbackPlan(
         time: `${dayStart.toISOString().split("T")[0]}T${mealTimes[mealIndex]}:00:00.000Z`,
         portion_note: `${mealType} from ${bestMatch.item.restaurant}. Enjoy mindfully and pair with water.`,
       });
+    } else {
+      // If we still can't find an item, log a warning but continue
+      console.warn(`[buildFallbackPlan] Could not find item for meal ${mealIndex}. Available items: ${diningItems.length}, Used: ${usedIndices.size}`);
     }
   }
 
-  // If we don't have 4 meals, fill with remaining items
+  // If we still don't have 4 meals (shouldn't happen with 60 items, but handle gracefully)
   if (selectedMeals.length < 4) {
+    console.warn(`[buildFallbackPlan] Only selected ${selectedMeals.length} meals. Attempting to fill remaining slots.`);
     for (let i = 0; i < diningItems.length && selectedMeals.length < 4; i++) {
-      if (usedIndices.has(i)) continue;
+      if (usedIndices.has(i) || usedItemIds.has(diningItems[i].id)) continue;
       const mealType = selectedMeals.length === 0 ? "Breakfast" : selectedMeals.length === 1 ? "Lunch" : selectedMeals.length === 2 ? "Dinner" : "Snack";
       const timeIndex = selectedMeals.length;
       selectedMeals.push({
@@ -375,24 +422,8 @@ function buildFallbackPlan(
         portion_note: `${mealType} from ${diningItems[i].restaurant}. Enjoy mindfully and pair with water.`,
       });
       usedIndices.add(i);
-    }
-    
-    // If we still don't have 4 meals (not enough items in database), repeat items with different meal types
-    // This ensures we always return 4 meals even if database has fewer items
-    while (selectedMeals.length < 4 && diningItems.length > 0) {
-      const itemIndex = selectedMeals.length % diningItems.length;
-      const mealType = selectedMeals.length === 0 ? "Breakfast" : selectedMeals.length === 1 ? "Lunch" : selectedMeals.length === 2 ? "Dinner" : "Snack";
-      const timeIndex = selectedMeals.length;
-      const item = diningItems[itemIndex];
-      selectedMeals.push({
-        id: `${item.id}-${selectedMeals.length}`, // Make unique ID by appending index
-    item: item.item,
-    restaurant: item.restaurant,
-    calories: item.calories,
-    protein_g: item.protein_g,
-        time: `${dayStart.toISOString().split("T")[0]}T${mealTimes[timeIndex]}:00:00.000Z`,
-        portion_note: `${mealType} from ${item.restaurant}. Enjoy mindfully and pair with water.`,
-      });
+      usedItemIds.add(diningItems[i].id);
+      usedVendors.add(diningItems[i].restaurant);
     }
   }
 
@@ -402,6 +433,10 @@ function buildFallbackPlan(
   }
 
   const meals = selectedMeals.slice(0, 4); // Ensure we never return more than 4
+  
+  // Log selected meals for debugging
+  console.log(`[buildFallbackPlan] Selected ${meals.length} meals:`, meals.map(m => `${m.item} (${m.restaurant}, ${m.calories} kcal)`).join(", "));
+  console.log(`[buildFallbackPlan] Unique vendors: ${new Set(meals.map(m => m.restaurant)).size}, Unique items: ${new Set(meals.map(m => m.id)).size}`);
 
   const workouts = recClasses.slice(0, 1).map((cls) => ({
     id: cls.id,
@@ -461,10 +496,39 @@ export async function POST(request: NextRequest) {
 
       if (cached) {
         try {
-          const payload = JSON.parse(cached.payload);
-          return NextResponse.json(payload);
+          const payload = JSON.parse(cached.payload) as PlanResultPayload;
+          
+          // Validate cached plan has 4 different meals
+          if (payload.meals && Array.isArray(payload.meals)) {
+            const mealIds = payload.meals.map(m => m.id);
+            const uniqueIds = new Set(mealIds);
+            
+            // If cached plan has duplicates or wrong number of meals, regenerate
+            if (payload.meals.length !== 4 || uniqueIds.size < 4) {
+              console.warn(`[plan/generate] Cached plan invalid: ${payload.meals.length} meals, ${uniqueIds.size} unique IDs. Regenerating...`);
+              // Delete invalid cached plan and continue to generate new one
+              await prisma.aIRec.delete({
+                where: { id: cached.id },
+              }).catch(() => {}); // Ignore delete errors
+            } else {
+              // Cached plan is valid, return it
+              return NextResponse.json(payload);
+            }
+          } else {
+            // Invalid payload structure, regenerate
+            console.warn("[plan/generate] Cached plan has invalid structure. Regenerating...");
+            await prisma.aIRec.delete({
+              where: { id: cached.id },
+            }).catch(() => {}); // Ignore delete errors
+          }
         } catch (error) {
           console.warn("[plan/generate] Failed to parse cached payload, regenerating.", error);
+          // Try to delete corrupted cache
+          try {
+            await prisma.aIRec.delete({
+              where: { id: cached.id },
+            });
+          } catch {}
         }
         }
       } catch (error: any) {
@@ -647,6 +711,28 @@ export async function POST(request: NextRequest) {
     }
 
     const resultPayload = completionResult || fallbackPlan();
+
+    // Validate that we have 4 different meals before saving
+    if (resultPayload.meals.length !== 4) {
+      console.warn(`[plan/generate] Plan has ${resultPayload.meals.length} meals instead of 4. Regenerating...`);
+      const regenerated = fallbackPlan();
+      if (regenerated.meals.length === 4) {
+        resultPayload.meals = regenerated.meals;
+      }
+    }
+
+    // Check for duplicate meal IDs
+    const mealIds = resultPayload.meals.map(m => m.id);
+    const uniqueIds = new Set(mealIds);
+    if (uniqueIds.size < resultPayload.meals.length) {
+      console.warn(`[plan/generate] Plan has duplicate meal IDs. Unique: ${uniqueIds.size}, Total: ${resultPayload.meals.length}. Regenerating...`);
+      const regenerated = fallbackPlan();
+      const regeneratedIds = regenerated.meals.map(m => m.id);
+      const regeneratedUnique = new Set(regeneratedIds);
+      if (regeneratedUnique.size === regenerated.meals.length && regenerated.meals.length === 4) {
+        resultPayload.meals = regenerated.meals;
+      }
+    }
 
     try {
     await prisma.aIRec.upsert({
