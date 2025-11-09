@@ -2,6 +2,10 @@ import OpenAI from "openai";
 import { prisma } from "@/lib/prisma";
 import { searchMenuItems, getUserContext, listRecClasses, composeTimeline } from "./planner-tools";
 
+if (!process.env.OPENAI_API_KEY) {
+  console.warn("OPENAI_API_KEY is not set. AI plan generation will fail.");
+}
+
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
@@ -176,12 +180,38 @@ Generate a practical plan with specific meal recommendations and workout suggest
     },
   ];
   
-  const response = await openai.chat.completions.create({
-    model: CHAT_MODEL,
-    messages,
-    tools,
-    tool_choice: "auto",
-  });
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is not configured. Please set it in .env.local");
+  }
+
+  let response;
+  try {
+    response = await openai.chat.completions.create({
+      model: CHAT_MODEL,
+      messages,
+      tools,
+      tool_choice: "auto",
+    });
+  } catch (openaiError: any) {
+    console.error("OpenAI API error:", {
+      status: openaiError?.status,
+      statusText: openaiError?.statusText,
+      message: openaiError?.message,
+      code: openaiError?.code,
+      type: openaiError?.type,
+      error: openaiError?.error,
+    });
+    if (openaiError?.status === 401) {
+      throw new Error("Invalid OpenAI API key. Please check your OPENAI_API_KEY in .env.local");
+    } else if (openaiError?.status === 429) {
+      throw new Error("OpenAI API rate limit exceeded. Please try again later.");
+    } else if (openaiError?.code === "insufficient_quota") {
+      throw new Error("OpenAI API quota exceeded. Please check your OpenAI account billing.");
+    } else {
+      const errorMsg = openaiError?.error?.message || openaiError?.message || String(openaiError);
+      throw new Error(`OpenAI API error: ${errorMsg}${openaiError?.status ? ` (Status: ${openaiError.status})` : ""}`);
+    }
+  }
   
   // Handle function calls
   let finalResponse = response.choices[0].message;

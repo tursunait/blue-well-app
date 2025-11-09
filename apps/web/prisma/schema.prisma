@@ -6,8 +6,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
+  // SQLite stores arrays as JSON automatically
 }
 
 model User {
@@ -21,14 +22,14 @@ model User {
   age             Int?
   heightCm        Float?
   weightKg        Float?
-  fitnessGoal     FitnessGoal?
-  reminderPref    ReminderPref?
+  fitnessGoal     String?   // FitnessGoal enum stored as string
+  reminderPref    String?   // ReminderPref enum stored as string
   scheduleCons    Int?      // 1..5
   mealRegular     Int?      // 1..5
   weeklyActivity  Int?      // 1..4
   timeBudgetMin   Int?      // bucket: 10, 20, 40, 60+
-  dietPrefs       String[]  @default([])
-  avoidFoods      String[]  @default([])
+  dietPrefs       String?   // JSON array stored as string
+  avoidFoods      String?   // JSON array stored as string
   googleCalConnected Boolean @default(false)
   myRecConnected     Boolean @default(false)
   profile         Profile?
@@ -40,8 +41,9 @@ model User {
   mealLogs        MealLog[] // legacy
 }
 
-enum FitnessGoal { LOSE_FAT MAINTAIN GAIN_MUSCLE FITNESS ATHLETIC UNKNOWN }
-enum ReminderPref { LIGHT BALANCED DAILY NONE }
+// Enums are stored as strings in SQLite
+// FitnessGoal: "LOSE_FAT" | "MAINTAIN" | "GAIN_MUSCLE" | "FITNESS" | "ATHLETIC" | "UNKNOWN"
+// ReminderPref: "LIGHT" | "BALANCED" | "DAILY" | "NONE"
 
 model Profile {
   id             String   @id @default(cuid())
@@ -54,10 +56,10 @@ model Profile {
   units          String?  // metric/imperial
   primaryGoal    String?
   weeklyWorkouts Int?     // target
-  dietPrefs      String[] // ["Vegan","Halal"]
-  allergies      String[]
+  dietPrefs      String? // JSON array stored as string: ["Vegan","Halal"]
+  allergies      String? // JSON array stored as string
   budgetWeekly   Int?
-  timePrefs      String[] // ["morning","evening"]
+  timePrefs      String? // JSON array stored as string: ["morning","evening"]
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   @@index([userId])
@@ -80,10 +82,10 @@ model SurveyAnswer {
   userId     String
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   questionId String
-  value      Json
+  value      String  // JSON stored as string
   tsISO      DateTime @default(now())
   surveyId   String?  // optional for backward compatibility
-  answerJson Json?    // optional for backward compatibility
+  answerJson String?    // JSON stored as string (optional for backward compatibility)
   createdAt  DateTime @default(now())
   @@index([userId, surveyId])
 }
@@ -93,9 +95,9 @@ model MealLog {
   userId     String
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   imageUrl   String?
-  itemsJson  Json?     // [{name, kcal, protein, fat, carbs}]
+  itemsJson  String?     // JSON stored as string: [{name, kcal, protein, fat, carbs}]
   totalKcal  Int?
-  totalMacros Json?
+  totalMacros String?    // JSON stored as string
   createdAt  DateTime @default(now())
   source     String    // "photo" | "manual"
   @@index([userId, createdAt])
@@ -123,7 +125,7 @@ model MenuItem {
   carbsG     Float?
   fatG       Float?
   priceUSD   Float?
-  tags       String[] @default([])
+  tags       String?   // JSON array stored as string
   embedding  Bytes?
   updatedAt  DateTime @default(now())
   @@unique([vendorId, normalized])
@@ -176,7 +178,7 @@ model Recommendation {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   date      DateTime @default(now())
   scope     String   // "TODAY" | "NEXT_6_HOURS" | "WEEK"
-  payload   Json
+  payload   String   // JSON stored as string
   rationale String?
   @@index([userId, date])
 }
@@ -190,7 +192,7 @@ model ClassSlot {
   location  String?
   spotsOpen Int?
   provider  String    // "myrec"
-  rawJson   Json?
+  rawJson   String?   // JSON stored as string
   createdAt DateTime @default(now())
   @@index([start])
 }

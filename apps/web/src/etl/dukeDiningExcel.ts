@@ -1,5 +1,7 @@
-import * as XLSX from "xlsx";
 import * as path from "path";
+import * as fs from "fs";
+import * as os from "os";
+import fetch from "node-fetch";
 import { prisma } from "@/lib/prisma";
 import { embedMenuItems } from "@/ai/embeddings";
 
@@ -87,35 +89,40 @@ function normalizeItemName(name: string): string {
 }
 
 /**
- * Parse a sheet into rows
+ * Parse CSV string into rows
  */
-function parseSheet(sheet: XLSX.WorkSheet): ParsedRow[] {
+function parseCSV(csvText: string): ParsedRow[] {
   const rows: ParsedRow[] = [];
-  const data = XLSX.utils.sheet_to_json(sheet, { raw: false });
+  const lines = csvText.split(/\r?\n/).filter(line => line.trim());
   
-  if (data.length === 0) return rows;
+  if (lines.length < 2) return rows; // Need at least header + one data row
   
-  // Find header row (first row with non-empty values)
-  const firstRow = data[0] as Record<string, any>;
-  const headers: Record<string, string> = {};
+  // Parse header row
+  const headerLine = lines[0];
+  const headerValues = parseCSVLine(headerLine);
+  const headers: Record<string, number> = {}; // Map field name to column index
   
-  for (const [key, value] of Object.entries(firstRow)) {
-    const field = normalizeHeader(key);
+  for (let i = 0; i < headerValues.length; i++) {
+    const field = normalizeHeader(headerValues[i]);
     if (field) {
-      headers[field] = key;
+      headers[field] = i;
     }
   }
   
   // Validate required fields
-  if (!headers.vendor || !headers.name) {
-    console.warn("Sheet missing required fields (vendor, name), skipping");
+  if (headers.vendor === undefined || headers.name === undefined) {
+    console.warn("CSV missing required fields (vendor, name), skipping");
     return rows;
   }
   
-  // Parse rows
-  for (const row of data as Record<string, any>[]) {
-    const vendor = String(row[headers.vendor] || "").trim();
-    const name = String(row[headers.name] || "").trim();
+  // Parse data rows
+  for (let i = 1; i < lines.length; i++) {
+    const values = parseCSVLine(lines[i]);
+    
+    if (values.length === 0) continue;
+    
+    const vendor = (values[headers.vendor] || "").trim();
+    const name = (values[headers.name] || "").trim();
     
     if (!vendor || !name) continue;
     
@@ -124,42 +131,45 @@ function parseSheet(sheet: XLSX.WorkSheet): ParsedRow[] {
       name,
     };
     
-    if (headers.campusLoc) {
-      parsed.campusLoc = String(row[headers.campusLoc] || "").trim() || undefined;
+    if (headers.campusLoc !== undefined) {
+      parsed.campusLoc = (values[headers.campusLoc] || "").trim() || undefined;
     }
     
-    if (headers.description) {
-      parsed.description = String(row[headers.description] || "").trim() || undefined;
+    if (headers.description !== undefined) {
+      parsed.description = (values[headers.description] || "").trim() || undefined;
     }
     
-    if (headers.calories) {
-      parsed.calories = parseNumber(row[headers.calories]);
+    if (headers.calories !== undefined) {
+      parsed.calories = parseNumber(values[headers.calories]);
     }
     
-    if (headers.proteinG) {
-      parsed.proteinG = parseNumber(row[headers.proteinG]);
+    if (headers.proteinG !== undefined) {
+      parsed.proteinG = parseNumber(values[headers.proteinG]);
     }
     
-    if (headers.carbsG) {
-      parsed.carbsG = parseNumber(row[headers.carbsG]);
+    if (headers.carbsG !== undefined) {
+      parsed.carbsG = parseNumber(values[headers.carbsG]);
     }
     
-    if (headers.fatG) {
-      parsed.fatG = parseNumber(row[headers.fatG]);
+    if (headers.fatG !== undefined) {
+      parsed.fatG = parseNumber(values[headers.fatG]);
     }
     
-    if (headers.priceUSD) {
-      parsed.priceUSD = parseNumber(row[headers.priceUSD]);
+    if (headers.priceUSD !== undefined) {
+      parsed.priceUSD = parseNumber(values[headers.priceUSD]);
     }
     
-    if (headers.tags) {
-      parsed.tags = parseTags(row[headers.tags]);
+    if (headers.tags !== undefined) {
+      parsed.tags = parseTags(values[headers.tags]);
     }
     
-    if (headers.updatedAt) {
-      const date = XLSX.SSF.parse_date_code(row[headers.updatedAt]);
-      if (date) {
-        parsed.updatedAt = new Date(date);
+    if (headers.updatedAt !== undefined) {
+      const dateStr = (values[headers.updatedAt] || "").trim();
+      if (dateStr) {
+        const date = new Date(dateStr);
+        if (!isNaN(date.getTime())) {
+          parsed.updatedAt = date;
+        }
       }
     }
     
@@ -170,10 +180,47 @@ function parseSheet(sheet: XLSX.WorkSheet): ParsedRow[] {
 }
 
 /**
- * Import Duke Dining Excel file
+ * Parse a CSV line, handling quoted fields
+ */
+function parseCSVLine(line: string): string[] {
+  const values: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        // Escaped quote
+        current += '"';
+        i++; // Skip next quote
+      } else {
+        // Toggle quote state
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      // Field separator
+      values.push(current);
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  
+  // Add last field
+  values.push(current);
+  
+  return values;
+}
+
+/**
+ * Import Duke Dining CSV file
  */
 export async function importDukeDiningExcel(
-  file = path.join(process.cwd(), "data", "Data.xlsx")
+  // File is at root level: data/Data.csv
+  // Try multiple possible locations
+  file?: string
 ): Promise<{
   vendorsUpserted: number;
   itemsInserted: number;
@@ -181,22 +228,142 @@ export async function importDukeDiningExcel(
   embedded: number;
   skipped: number;
 }> {
+  // Resolve file path - download from GitHub if not provided
+  let tempFile: string | null = null;
+  
+  if (!file) {
+    // Try local paths first
+    const possiblePaths = [
+      path.join(process.cwd(), "..", "..", "data", "Data.csv"), // From apps/web to root
+      path.join(process.cwd(), "data", "Data.csv"), // If running from root
+      path.join(process.cwd(), "..", "data", "Data.csv"), // If running from apps
+    ];
+    
+    for (const possiblePath of possiblePaths) {
+      try {
+        // Resolve to absolute path
+        const resolvedPath = path.isAbsolute(possiblePath) 
+          ? possiblePath 
+          : path.resolve(possiblePath);
+        
+        if (fs.existsSync(resolvedPath)) {
+          file = resolvedPath;
+          console.log(`Found local file at: ${file}`);
+          break;
+        }
+      } catch (e) {
+        // Continue to next path
+      }
+    }
+    
+    // If not found locally, download from GitHub
+    if (!file) {
+      const githubUrl = "https://raw.githubusercontent.com/tursunait/blue-well-app/main/data/Data.csv";
+      console.log(`Local file not found, downloading from GitHub: ${githubUrl}`);
+      
+      try {
+        console.log(`Attempting to download from GitHub: ${githubUrl}`);
+        const response = await fetch(githubUrl);
+        
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => '');
+          throw new Error(`Failed to download from GitHub: ${response.status} ${response.statusText}. ${errorText.substring(0, 200)}`);
+        }
+        
+        const contentType = response.headers.get("content-type");
+        console.log(`Response content-type: ${contentType}`);
+        
+        const arrayBuffer = await response.arrayBuffer();
+        console.log(`Downloaded ${arrayBuffer.byteLength} bytes`);
+        
+        if (arrayBuffer.byteLength === 0) {
+          throw new Error("Downloaded file is empty");
+        }
+        
+        const buffer = Buffer.from(arrayBuffer);
+        
+        // Save to temporary file
+        tempFile = path.join(os.tmpdir(), `duke-dining-${Date.now()}.csv`);
+        fs.writeFileSync(tempFile, buffer);
+        file = tempFile;
+        
+        console.log(`Downloaded file to temporary location: ${tempFile} (${buffer.length} bytes)`);
+        
+        // Verify file exists and is readable
+        if (!fs.existsSync(tempFile)) {
+          throw new Error(`Temporary file was not created: ${tempFile}`);
+        }
+        
+        const stats = fs.statSync(tempFile);
+        console.log(`Temporary file size: ${stats.size} bytes`);
+        
+      } catch (error) {
+        console.error("GitHub download error:", error);
+        throw new Error(
+          `Cannot find Data.csv locally and failed to download from GitHub: ${error instanceof Error ? error.message : String(error)}. ` +
+          `Please ensure the file exists locally or check your internet connection.`
+        );
+      }
+    }
+  }
+  
   let vendorsUpserted = 0;
   let itemsInserted = 0;
   let itemsUpdated = 0;
   let skipped = 0;
   const itemIdsToEmbed: string[] = [];
   
-  // Read workbook
-  const workbook = XLSX.readFile(file);
-  const allRows: ParsedRow[] = [];
-  
-  // Parse all sheets
-  for (const sheetName of workbook.SheetNames) {
-    const sheet = workbook.Sheets[sheetName];
-    const rows = parseSheet(sheet);
-    allRows.push(...rows);
+  // Verify file exists before reading and resolve to absolute path
+  if (!file) {
+    throw new Error("File path is not set");
   }
+  
+  // Resolve to absolute path
+  const absolutePath = path.isAbsolute(file) ? file : path.resolve(file);
+  
+  if (!fs.existsSync(absolutePath)) {
+    throw new Error(`File does not exist: ${absolutePath}`);
+  }
+  
+  // Check file permissions
+  try {
+    fs.accessSync(absolutePath, fs.constants.R_OK);
+  } catch (error) {
+    throw new Error(`File is not readable: ${absolutePath}. ${error instanceof Error ? error.message : String(error)}`);
+  }
+  
+  const stats = fs.statSync(absolutePath);
+  if (stats.size === 0) {
+    throw new Error(`File is empty: ${absolutePath}`);
+  }
+  
+  console.log(`Reading CSV file: ${absolutePath} (${stats.size} bytes)`);
+  
+  // Read CSV file
+  let csvText: string;
+  try {
+    csvText = fs.readFileSync(absolutePath, 'utf-8');
+  } catch (error) {
+    throw new Error(
+      `Failed to read CSV file ${absolutePath}: ${error instanceof Error ? error.message : String(error)}. ` +
+      `Please ensure the file is a valid CSV file.`
+    );
+  }
+  
+  if (!csvText || csvText.trim().length === 0) {
+    throw new Error(`CSV file is empty: ${absolutePath}`);
+  }
+  
+  console.log(`Parsing CSV file (${csvText.split(/\r?\n/).length} lines)`);
+  
+  // Parse CSV
+  const allRows = parseCSV(csvText);
+  
+  if (allRows.length === 0) {
+    throw new Error(`CSV file has no valid data rows: ${absolutePath}`);
+  }
+  
+  console.log(`Parsed ${allRows.length} rows from CSV`);
   
   // Group by vendor
   const vendorMap = new Map<string, ParsedRow[]>();
@@ -251,7 +418,7 @@ export async function importDukeDiningExcel(
               carbsG: row.carbsG,
               fatG: row.fatG,
               priceUSD: row.priceUSD,
-              tags: row.tags || [],
+              tags: row.tags && row.tags.length > 0 ? JSON.stringify(row.tags) : null,
               updatedAt: row.updatedAt || new Date(),
               // Clear embedding if nutrition changed (will be regenerated)
               embedding: existing.embedding && (
@@ -279,7 +446,7 @@ export async function importDukeDiningExcel(
               carbsG: row.carbsG,
               fatG: row.fatG,
               priceUSD: row.priceUSD,
-              tags: row.tags || [],
+              tags: row.tags && row.tags.length > 0 ? JSON.stringify(row.tags) : null,
               updatedAt: row.updatedAt || new Date(),
             },
           });
@@ -298,6 +465,16 @@ export async function importDukeDiningExcel(
   let embedded = 0;
   if (itemIdsToEmbed.length > 0) {
     embedded = await embedMenuItems(itemIdsToEmbed);
+  }
+  
+  // Clean up temporary file if we downloaded it from GitHub
+  if (tempFile && fs.existsSync(tempFile)) {
+    try {
+      fs.unlinkSync(tempFile);
+      console.log(`Cleaned up temporary file: ${tempFile}`);
+    } catch (error) {
+      console.warn(`Failed to clean up temporary file ${tempFile}:`, error);
+    }
   }
   
   return {
