@@ -56,3 +56,10 @@ uploads/
 *.png
 *.gif
 
+# env files
+*.env
+*.env.*
+!.env.example
+apps/web/.env.local
+apps/web/.env.local.*
+apps/web/.env*
