@@ -402,11 +402,11 @@ export async function importDukeDiningExcel(
     if (!vendor) {
       vendor = await prisma.menuVendor.create({
         data: {
-          name: vendorName,
-          source: "DUKE_DINING",
-          campusLoc: rows[0]?.campusLoc,
-        },
-      });
+        name: vendorName,
+        source: "DUKE_DINING",
+        campusLoc: rows[0]?.campusLoc,
+      },
+    });
       vendorsUpserted++;
     } else {
       // Update if needed
@@ -417,7 +417,7 @@ export async function importDukeDiningExcel(
           campusLoc: rows[0]?.campusLoc || vendor.campusLoc,
         },
       });
-      vendorsUpserted++;
+    vendorsUpserted++;
     }
     
     // Upsert items
@@ -493,7 +493,7 @@ export async function importDukeDiningExcel(
   let embedded = 0;
   if (itemIdsToEmbed.length > 0 && process.env.OPENAI_API_KEY) {
     try {
-      embedded = await embedMenuItems(itemIdsToEmbed);
+    embedded = await embedMenuItems(itemIdsToEmbed);
     } catch (error: any) {
       const is429 = error?.status === 429 || error?.code === "insufficient_quota";
       if (is429) {

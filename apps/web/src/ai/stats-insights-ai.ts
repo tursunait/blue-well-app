@@ -96,13 +96,13 @@ Provide insights as JSON:
       withRetry(
         () =>
           openai.chat.completions.create({
-            model: CHAT_MODEL,
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: userPrompt },
-            ],
-            response_format: { type: "json_object" },
-            temperature: 0.7,
+      model: CHAT_MODEL,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.7,
           }),
         { retries: 2, baseMs: 500 } // Reduced retries for faster fallback
       ),

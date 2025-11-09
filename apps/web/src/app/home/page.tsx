@@ -10,8 +10,11 @@ import {
   CardContent,
   Button,
   FitnessGoalCard,
+  MealPlanCard,
+  MealDeliveryCard,
 } from "@halo/ui";
 import { WellnessDisclaimer } from "@/components/WellnessDisclaimer";
+import { getRandomMealDeliveryLink, type MealDeliveryLink, MEAL_DELIVERY_LINKS } from "@/data/meal-delivery-links";
 
 interface PlanResponse {
   day: string;
@@ -60,6 +63,14 @@ export default function HomePage() {
     location?: string;
   } | null>(null);
   const [classLoading, setClassLoading] = useState(true);
+  
+  // Meal delivery state
+  const [selectedMeal, setSelectedMeal] = useState<string | null>(null);
+  const [currentDeliveryLink, setCurrentDeliveryLink] = useState<MealDeliveryLink | null>(null);
+  const [excludedUrls, setExcludedUrls] = useState<string[]>([]);
+  
+  // Get meal options from the data file
+  const mealOptions = Object.keys(MEAL_DELIVERY_LINKS);
 
   useEffect(() => {
     loadPlan(false);
@@ -150,6 +161,45 @@ export default function HomePage() {
     } catch {
       return "";
     }
+  };
+
+  // Handle meal selection
+  const handleMealSelect = (meal: string) => {
+    setSelectedMeal(meal);
+    // Reset excluded URLs when selecting a new meal
+    setExcludedUrls([]);
+    // Get a random delivery link for the selected meal
+    const link = getRandomMealDeliveryLink(meal, []);
+    setCurrentDeliveryLink(link);
+  };
+
+  // Handle skip delivery link
+  const handleSkipDelivery = () => {
+    if (!selectedMeal) return;
+    
+    // Add current URL to excluded list and get a new link
+    if (currentDeliveryLink) {
+      const updatedExcluded = [...excludedUrls, currentDeliveryLink.url];
+      setExcludedUrls(updatedExcluded);
+      
+      // Get a new random link (excluding all previous ones)
+      const newLink = getRandomMealDeliveryLink(selectedMeal, updatedExcluded);
+      setCurrentDeliveryLink(newLink);
+    }
+  };
+
+  // Handle accept delivery link
+  const handleAcceptDelivery = () => {
+    if (currentDeliveryLink?.url) {
+      window.open(currentDeliveryLink.url, "_blank", "noopener,noreferrer");
+    }
+  };
+
+  // Handle skip meal selection
+  const handleSkipMeal = () => {
+    setSelectedMeal(null);
+    setCurrentDeliveryLink(null);
+    setExcludedUrls([]);
   };
 
   const timelineEvents: TimelineEvent[] = useMemo(() => {
@@ -321,6 +371,29 @@ export default function HomePage() {
             }}
           />
         )}
+
+        {/* Meal Delivery Section */}
+        {mealOptions.length > 0 && (
+          <div className="space-y-4">
+            {!selectedMeal ? (
+          <MealPlanCard
+            mealOptions={mealOptions}
+                selectedMeal={selectedMeal || undefined}
+                onSelectMeal={handleMealSelect}
+                onSkip={handleSkipMeal}
+          />
+            ) : currentDeliveryLink ? (
+            <MealDeliveryCard
+              restaurantName={currentDeliveryLink.restaurantName}
+              mealName={currentDeliveryLink.dishName}
+              deliveryService={currentDeliveryLink.service}
+                url={currentDeliveryLink.url}
+                onAccept={handleAcceptDelivery}
+                onSkip={handleSkipDelivery}
+            />
+            ) : null}
+          </div>
+          )}
 
         {timelineEvents.length > 0 && <Timeline events={timelineEvents} />}
       </div>

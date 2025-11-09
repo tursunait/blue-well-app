@@ -88,7 +88,7 @@ export async function GET() {
       gender: user.gender ?? profile?.gender ?? null,
     };
 
-    const survey = surveyAnswers.map((entry) => ({
+    const survey = surveyAnswers.map((entry: { questionId: string; value: string | null; answerJson?: string | null }) => ({
       questionId: entry.questionId,
       label: SURVEY_LABELS[entry.questionId] || null,
       answer: safeParse(entry.answerJson || entry.value),

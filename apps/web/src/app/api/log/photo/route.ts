@@ -13,7 +13,7 @@ const openai = new OpenAI({
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+  const session = await getServerSession(authOptions);
     let userId: string | null = null;
     
     userId = await getUserId(session);
@@ -29,9 +29,9 @@ export async function POST(request: NextRequest) {
     }
     
     if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  
     const body = await request.json();
     const { image, imageUrl } = body; // base64 image or URL
     
@@ -53,25 +53,25 @@ export async function POST(request: NextRequest) {
     const visionResponse = await withRetry(
       () =>
         openai.chat.completions.create({
-          model: "gpt-4o-mini",
-          messages: [
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "user",
+          content: [
             {
-              role: "user",
-              content: [
-                {
-                  type: "text",
-                  text: "Analyze this food image and return a JSON object with: name (string), calories (number), proteinG (number), carbsG (number), fatG (number). Be as accurate as possible. If uncertain, provide estimates and mark as estimate: true.",
-                },
-                {
-                  type: "image_url",
-                  image_url: {
-                    url: imageData.startsWith("data:") ? imageData : `data:image/jpeg;base64,${imageData}`,
-                  },
-                },
-              ],
+              type: "text",
+              text: "Analyze this food image and return a JSON object with: name (string), calories (number), proteinG (number), carbsG (number), fatG (number). Be as accurate as possible. If uncertain, provide estimates and mark as estimate: true.",
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: imageData.startsWith("data:") ? imageData : `data:image/jpeg;base64,${imageData}`,
+              },
             },
           ],
-          response_format: { type: "json_object" },
+        },
+      ],
+      response_format: { type: "json_object" },
           max_tokens: 500,
         }),
       { retries: 2, baseMs: 500 }

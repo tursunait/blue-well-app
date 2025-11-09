@@ -132,7 +132,7 @@ async function loadDiningItems(userId: string, dietPrefs: string[], avoidFoods: 
   let filteredByDiet = baseItems;
   if (dietPrefs.length > 0) {
     filteredByDiet = baseItems.filter((item: typeof baseItems[0]) => {
-      const tags = parseJsonArray<string>(item.tags).map((tag) => tag.toLowerCase());
+        const tags = parseJsonArray<string>(item.tags).map((tag) => tag.toLowerCase());
       // Check if any diet preference matches any tag (more lenient than "every")
       // Also check item name/description for diet keywords
       const nameDesc = `${item.name} ${item.description || ""}`.toLowerCase();
@@ -386,10 +386,10 @@ function buildFallbackPlan(
       const item = diningItems[itemIndex];
       selectedMeals.push({
         id: `${item.id}-${selectedMeals.length}`, // Make unique ID by appending index
-        item: item.item,
-        restaurant: item.restaurant,
-        calories: item.calories,
-        protein_g: item.protein_g,
+    item: item.item,
+    restaurant: item.restaurant,
+    calories: item.calories,
+    protein_g: item.protein_g,
         time: `${dayStart.toISOString().split("T")[0]}T${mealTimes[timeIndex]}:00:00.000Z`,
         portion_note: `${mealType} from ${item.restaurant}. Enjoy mindfully and pair with water.`,
       });
@@ -451,21 +451,21 @@ export async function POST(request: NextRequest) {
 
     if (!refresh) {
       try {
-        const cached = await prisma.aIRec.findFirst({
-          where: {
-            userId,
-            kind: "plan",
-            day: dayStart,
-          },
-        });
+      const cached = await prisma.aIRec.findFirst({
+        where: {
+          userId,
+          kind: "plan",
+          day: dayStart,
+        },
+      });
 
-        if (cached) {
-          try {
-            const payload = JSON.parse(cached.payload);
-            return NextResponse.json(payload);
-          } catch (error) {
-            console.warn("[plan/generate] Failed to parse cached payload, regenerating.", error);
-          }
+      if (cached) {
+        try {
+          const payload = JSON.parse(cached.payload);
+          return NextResponse.json(payload);
+        } catch (error) {
+          console.warn("[plan/generate] Failed to parse cached payload, regenerating.", error);
+        }
         }
       } catch (error: any) {
         console.warn("[plan/generate] Failed to check cache, continuing with generation:", error?.message || error);
@@ -541,27 +541,27 @@ export async function POST(request: NextRequest) {
       const resultPayload = fallbackPlan();
 
       try {
-        await prisma.aIRec.upsert({
-          where: {
-            userId_day_kind: {
-              userId,
-              day: dayStart,
-              kind: "plan",
-            },
-          },
-          update: {
-            payload: JSON.stringify(resultPayload),
-            model: resultPayload.model,
-            updatedAt: new Date(),
-          },
-          create: {
+      await prisma.aIRec.upsert({
+        where: {
+          userId_day_kind: {
             userId,
             day: dayStart,
             kind: "plan",
-            payload: JSON.stringify(resultPayload),
-            model: resultPayload.model,
           },
-        });
+        },
+        update: {
+          payload: JSON.stringify(resultPayload),
+          model: resultPayload.model,
+          updatedAt: new Date(),
+        },
+        create: {
+          userId,
+          day: dayStart,
+          kind: "plan",
+          payload: JSON.stringify(resultPayload),
+          model: resultPayload.model,
+        },
+      });
       } catch (dbError: any) {
         console.error("[plan/generate] Failed to save fallback plan to database:", dbError?.message || dbError);
         // Still return the plan even if DB save fails
@@ -649,27 +649,27 @@ export async function POST(request: NextRequest) {
     const resultPayload = completionResult || fallbackPlan();
 
     try {
-      await prisma.aIRec.upsert({
-        where: {
-          userId_day_kind: {
-            userId,
-            day: dayStart,
-            kind: "plan",
-          },
-        },
-        update: {
-          payload: JSON.stringify(resultPayload),
-          model: resultPayload.model,
-          updatedAt: new Date(),
-        },
-        create: {
+    await prisma.aIRec.upsert({
+      where: {
+        userId_day_kind: {
           userId,
           day: dayStart,
           kind: "plan",
-          payload: JSON.stringify(resultPayload),
-          model: resultPayload.model,
         },
-      });
+      },
+      update: {
+        payload: JSON.stringify(resultPayload),
+        model: resultPayload.model,
+        updatedAt: new Date(),
+      },
+      create: {
+        userId,
+        day: dayStart,
+        kind: "plan",
+        payload: JSON.stringify(resultPayload),
+        model: resultPayload.model,
+      },
+    });
     } catch (dbError: any) {
       console.error("[plan/generate] Failed to save plan to database:", dbError?.message || dbError);
       // Still return the plan even if DB save fails

@@ -407,14 +407,14 @@ export default function OnboardingPage() {
         <div className="flex justify-between items-center pt-4">
           <div className="flex-1"></div>
           <div className="flex-1 flex justify-center">
-            <Image
-              src="/img/logo_icon.png"
-              alt="BlueWell"
-              width={48}
-              height={48}
-              className="object-contain"
-              priority
-            />
+          <Image
+            src="/img/logo_icon.png"
+            alt="BlueWell"
+            width={48}
+            height={48}
+            className="object-contain"
+            priority
+          />
           </div>
           <div className="flex-1 flex justify-end">
             {validIndex > 0 && (

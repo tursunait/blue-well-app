@@ -7,6 +7,7 @@ export async function chatRequest(
   conversationHistory?: Array<{ role: string; content: string }>,
   userProfile?: Record<string, any>
 ) {
+  try {
   const response = await fetch(`${FASTAPI_BASE_URL}/chat`, {
     method: "POST",
     headers: {
@@ -19,8 +20,29 @@ export async function chatRequest(
       user_profile: userProfile,
     }),
   });
-  if (!response.ok) throw new Error("Chat request failed");
+    
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "Unknown error");
+      console.error("[chatRequest] API error:", response.status, errorText);
+      throw new Error(
+        response.status === 500
+          ? "The chat service is temporarily unavailable. Please try again later."
+          : response.status === 404
+          ? "Chat endpoint not found. Please check if the API server is running."
+          : `Chat request failed: ${response.status} ${errorText}`
+      );
+    }
+    
   return response.json();
+  } catch (error) {
+    if (error instanceof TypeError && error.message.includes("fetch")) {
+      console.error("[chatRequest] Network error:", error);
+      throw new Error(
+        "Unable to connect to chat service. Please make sure the API server is running on port 8000."
+      );
+    }
+    throw error;
+  }
 }
 
 // Response types for calorie estimation

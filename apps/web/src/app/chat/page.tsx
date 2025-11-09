@@ -61,6 +61,16 @@ export default function ChatPage() {
       setMessages((prev) => [...prev, userMessage, aiMessage]);
       setInput("");
     },
+    onError: (error) => {
+      console.error("Chat error:", error);
+      const errorMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: error instanceof Error ? error.message : "Sorry, I'm having trouble connecting. Please make sure the API server is running on port 8000.",
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    },
   });
 
   const handleSuggestionAction = async (suggestion: Suggestion) => {
