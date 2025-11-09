@@ -12,6 +12,7 @@ import {
   CardContent,
 } from "@halo/ui";
 import { useNutrition } from "@/contexts/nutrition-context";
+import { getRandomMealDeliveryLink, type MealDeliveryLink } from "@/data/meal-delivery-links";
 
 // BlueWell Home - Your Day, Optimized
 export default function HomePage() {
@@ -30,6 +31,10 @@ export default function HomePage() {
     tips: string[];
   } | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Meal delivery link state
+  const [currentDeliveryLink, setCurrentDeliveryLink] = useState<MealDeliveryLink | null>(null);
+  const [excludedUrls, setExcludedUrls] = useState<string[]>([]);
 
   useEffect(() => {
     loadData();
@@ -81,13 +86,31 @@ export default function HomePage() {
   const mealOptions = mealItems.map((item: any) => item.title || item.name || "Meal");
   const [selectedMeal, setSelectedMeal] = useState<string | undefined>();
 
-  // Meal delivery recommendation (first meal item)
-  const firstMeal = mealItems[0];
-  const mealDelivery = firstMeal ? {
-    restaurant: firstMeal.vendor || "Campus Dining",
-    meal: firstMeal.title || firstMeal.name || "Meal",
-    service: (firstMeal.deliveryApp || "CAMPUS") as "Grubhub" | "Uber Eats" | "DoorDash" | "CAMPUS",
-  } : null;
+  // Effect to update delivery link when meal selection changes
+  useEffect(() => {
+    if (selectedMeal) {
+      const newLink = getRandomMealDeliveryLink(selectedMeal, excludedUrls);
+      setCurrentDeliveryLink(newLink);
+    }
+  }, [selectedMeal, excludedUrls]);
+
+  // Handlers for meal delivery card
+  const handleMealDeliveryAccept = () => {
+    if (currentDeliveryLink) {
+      // Open the delivery service link in a new tab
+      window.open(currentDeliveryLink.url, '_blank');
+    }
+  };
+
+  const handleMealDeliverySkip = () => {
+    if (currentDeliveryLink && selectedMeal) {
+      // Add current URL to excluded list
+      setExcludedUrls((prev) => [...prev, currentDeliveryLink.url]);
+      // Get a new random link (excluding the ones we've seen)
+      const newLink = getRandomMealDeliveryLink(selectedMeal, [...excludedUrls, currentDeliveryLink.url]);
+      setCurrentDeliveryLink(newLink);
+    }
+  };
 
   // Timeline events for next 6 hours from plan
   const timelineEvents: TimelineEvent[] = (next6hPlan?.items || []).map((item: any, idx: number) => {
@@ -267,10 +290,8 @@ export default function HomePage() {
               selectedMeal={selectedMeal}
               onSelectMeal={(meal) => {
                 setSelectedMeal(meal);
+                setExcludedUrls([]); // Reset excluded URLs when new meal is selected
                 console.log("Selected meal:", meal);
-              }}
-              onSkip={() => {
-                console.log("Skipped meal plan");
               }}
             />
           ) : (
@@ -280,44 +301,22 @@ export default function HomePage() {
                 selectedMeal={selectedMeal}
                 onSelectMeal={(meal) => {
                   setSelectedMeal(meal);
+                  setExcludedUrls([]); // Reset excluded URLs when new meal is selected
                   console.log("Selected meal:", meal);
-                }}
-                onSkip={() => {
-                  console.log("Skipped meal plan");
                 }}
               />
             )
           )}
 
-          {/* Meal Delivery Recommendation */}
-          {mealDelivery ? (
+          {/* Meal Delivery Recommendation - Only show when meal is selected */}
+          {currentDeliveryLink && selectedMeal && (
             <MealDeliveryCard
-              restaurantName={mealDelivery.restaurant}
-              mealName={mealDelivery.meal}
-              deliveryService={mealDelivery.service === "CAMPUS" ? "Grubhub" : mealDelivery.service}
-              onAccept={() => {
-                console.log("Accepted meal delivery");
-                // Add logic to open delivery app or log meal
-              }}
-              onSkip={() => {
-                console.log("Skipped meal delivery");
-                loadData(); // Refresh to get new recommendations
-              }}
+              restaurantName={currentDeliveryLink.restaurantName}
+              mealName={currentDeliveryLink.dishName}
+              deliveryService={currentDeliveryLink.service}
+              onAccept={handleMealDeliveryAccept}
+              onSkip={handleMealDeliverySkip}
             />
-          ) : (
-            !loading && (
-              <MealDeliveryCard
-                restaurantName="Yoprea"
-                mealName="Mediterranean Bowl"
-                deliveryService="Grubhub"
-                onAccept={() => {
-                  console.log("Accepted meal delivery");
-                }}
-                onSkip={() => {
-                  console.log("Skipped meal delivery");
-                }}
-              />
-            )
           )}
         </div>
 
