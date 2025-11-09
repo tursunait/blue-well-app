@@ -63,3 +63,10 @@ uploads/
 apps/web/.env.local
 apps/web/.env.local.*
 apps/web/.env*
+# env files
+*.env
+*.env.*
+!.env.example
+apps/web/.env.local
+apps/web/.env.local.*
+apps/web/.env*
