@@ -11,15 +11,26 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
 
-  // Fetch user profile for personalization
-  const { data: userProfile } = useQuery({
-    queryKey: ["userProfile"],
+  // Fetch persona & survey context for personalization
+  const { data: personaData } = useQuery({
+    queryKey: ["chatPersona"],
     queryFn: async () => {
-      const response = await fetch("/api/profile");
+      const response = await fetch("/api/chat/profile");
       if (!response.ok) return null;
       return response.json();
     },
   });
+
+  const persona = personaData?.persona;
+  const personaContext = persona
+    ? {
+        targets: {
+          calorieBudget: persona.calorieBudget,
+          proteinTarget: persona.proteinTarget,
+        },
+        surveyAnswers: personaData?.surveyAnswers || [],
+      }
+    : undefined;
 
   const sendMessage = useMutation({
     mutationFn: async (message: string) => {
@@ -31,7 +42,7 @@ export default function ChatPage() {
           content: msg.content,
         }));
 
-      return chatRequest(message, undefined, conversationHistory, userProfile || undefined);
+      return chatRequest(message, personaContext, conversationHistory, persona || undefined);
     },
     onSuccess: (data, message) => {
       const userMessage: ChatMessage = {
