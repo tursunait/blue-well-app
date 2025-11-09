@@ -50,7 +50,6 @@ export default function AIPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-<<<<<<< HEAD
   useEffect(() => {
     loadPlan();
   }, []);
@@ -66,84 +65,6 @@ export default function AIPage() {
           throw new Error("Please sign in to view your meal plan");
         } else if (response.status === 404) {
           throw new Error("Please complete onboarding to get your meal plan");
-=======
-  // Fetch user profile for personalization
-  const { data: personaData } = useQuery({
-    queryKey: ["chatPersona"],
-    queryFn: async () => {
-      const response = await fetch("/api/chat/profile");
-      if (!response.ok) return null;
-      return response.json();
-    },
-  });
-
-  const userProfile = personaData?.persona;
-  const personaContext = userProfile
-    ? {
-        targets: {
-          calorieBudget: userProfile.calorieBudget,
-          proteinTarget: userProfile.proteinTarget,
-        },
-        surveyAnswers: personaData?.surveyAnswers || [],
-      }
-    : undefined;
-
-  const sendMessage = useMutation({
-    mutationFn: async (message: string) => {
-      const conversationHistory = messages
-        .slice(-5)
-        .map((msg) => ({
-          role: msg.role,
-          content: msg.content,
-        }));
-
-      return chatRequest(message, personaContext, conversationHistory, userProfile || undefined);
-    },
-    onSuccess: (data, message) => {
-      const userMessage: ChatMessage = {
-        id: Date.now().toString(),
-        role: "user",
-        content: message,
-        timestamp: new Date().toISOString(),
-      };
-      const aiMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: data.message || "Here are some suggestions:",
-        suggestions: data.suggestions,
-        timestamp: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, userMessage, aiMessage]);
-      setInput("");
-    },
-    onError: (error) => {
-      console.error("Chat error:", error);
-      const errorMessage: ChatMessage = {
-        id: Date.now().toString(),
-        role: "assistant",
-        content: "Sorry, I'm having trouble connecting. Please make sure the API server is running on port 8000.",
-        timestamp: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-    },
-  });
-
-  const handleSuggestionAction = async (suggestion: Suggestion) => {
-    if (suggestion.kind === "class" && suggestion.payload) {
-      console.log("Reserve class:", suggestion);
-    } else if (suggestion.kind === "workout" || suggestion.kind === "meal") {
-      if (suggestion.payload?.startISO && suggestion.payload?.endISO) {
-        try {
-          await addCalendarEvent({
-            title: suggestion.title,
-            startISO: suggestion.payload.startISO,
-            endISO: suggestion.payload.endISO,
-            location: suggestion.payload.location,
-            notes: suggestion.desc,
-          });
-        } catch (error) {
-          console.error("Failed to add to calendar:", error);
->>>>>>> 7606347 (adding more chatbot fucntionalities)
         }
         throw new Error("Failed to load meal plan");
       }

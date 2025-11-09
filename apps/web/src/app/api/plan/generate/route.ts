@@ -164,7 +164,8 @@ async function loadDiningItems(userId: string, dietPrefs: string[], avoidFoods: 
   console.log(`[loadDiningItems] After avoid foods filter (${avoidFoods.length} foods): ${finalItems.length} items`);
 
   // Always return baseItems if finalItems is empty (to ensure we have something to work with)
-  const result = (finalItems.length > 0 ? finalItems : baseItems).slice(0, 20);
+  // Return more items (at least 40) to give AI enough variety for 4 different meals
+  const result = (finalItems.length > 0 ? finalItems : baseItems).slice(0, 60);
   console.log(`[loadDiningItems] Returning ${result.length} items for plan generation`);
 
   return result.map((item: typeof baseItems[0]) => ({
@@ -231,12 +232,19 @@ function buildPlanPrompt({
       content: [
         "You are BlueWell's daily wellness planner.",
         "You must ONLY use the provided dining_items and rec_classes IDs in your response.",
+        "CRITICAL: You must generate exactly 4 meals: breakfast, lunch, dinner, and snack.",
+        "CRITICAL: Each meal MUST use a DIFFERENT item ID from the dining_items list. Do NOT repeat the same item ID.",
+        "All meals MUST come from the provided dining_items list (Duke Dining vendors).",
+        "Respect the user's dietary preferences and avoid foods from their onboarding survey.",
+        "Select appropriate items for each meal type: breakfast items for breakfast, lunch items for lunch, etc.",
         "Respect dietary restrictions, allergies, and time availability.",
+        "Distribute calories appropriately: breakfast ~25%, lunch ~35%, dinner ~30%, snack ~10%.",
         "Provide suggestions, not prescriptions. Avoid medical language.",
-        "Keep calories within ±500 kcal of the provided target. Protein should support the goal.",
+        "Keep total calories within ±500 kcal of the provided target. Protein should support the goal.",
         "If insufficient information, suggest requesting more detail instead of inventing items.",
         "Output strict JSON with keys {\"meals\": [...], \"workouts\": [...]}.",
-        "For each meal and workout, include the referenced `id` and optional notes.",
+        "For each meal, include the referenced `id`, `time` (HH:MM format), and optional `portion_note`.",
+        "For each workout, include the referenced `id` and optional notes.",
       ].join(" "),
     },
     {
@@ -247,10 +255,17 @@ function buildPlanPrompt({
         dining_items: diningItems,
         rec_classes: recClasses,
         instructions: {
-          meals_required: 3,
+          meals_required: 4,
+          meal_types: ["breakfast", "lunch", "dinner", "snack"],
           include_times: true,
-          meal_time_guidance: ["07:00-09:30", "11:30-14:00", "17:30-20:30"],
+          meal_time_guidance: {
+            breakfast: "07:00-09:30",
+            lunch: "11:30-14:00",
+            dinner: "17:30-20:30",
+            snack: "14:00-16:00 or 20:30-22:00"
+          },
           tone: "Supportive and gentle",
+          note: "Must include exactly 4 meals: breakfast, lunch, dinner, and snack. Each meal must use a DIFFERENT item ID from the dining_items list. Do NOT repeat the same item for multiple meals.",
         },
         schema: {
           meals: [{ id: "string", time: "HH:MM", portion_note: "optional string" }],
@@ -280,16 +295,113 @@ function buildFallbackPlan(
     intensity?: string | null;
   }>
 ): PlanResultPayload {
-  const mealTimes = ["08:00", "12:30", "18:30"];
-  const meals = diningItems.slice(0, 3).map((item, index) => ({
-    id: item.id,
-    item: item.item,
-    restaurant: item.restaurant,
-    calories: item.calories,
-    protein_g: item.protein_g,
-    time: `${dayStart.toISOString().split("T")[0]}T${mealTimes[index]}:00`,
-    portion_note: "Enjoy mindfully and pair with water.",
-  }));
+  // Distribute calories: breakfast 25%, lunch 35%, dinner 30%, snack 10%
+  const mealTimes = ["08:00", "12:30", "18:30", "15:00"]; // breakfast, lunch, dinner, snack
+  const mealCalorieTargets = [
+    Math.round(targets.kcal * 0.25), // breakfast
+    Math.round(targets.kcal * 0.35), // lunch
+    Math.round(targets.kcal * 0.30), // dinner
+    Math.round(targets.kcal * 0.10), // snack
+  ];
+  const mealProteinTargets = [
+    Math.round(targets.protein_g * 0.25), // breakfast
+    Math.round(targets.protein_g * 0.35), // lunch
+    Math.round(targets.protein_g * 0.30), // dinner
+    Math.round(targets.protein_g * 0.10), // snack
+  ];
+
+  // Select items that best match calorie targets for each meal
+  const selectedMeals: Array<{
+    id: string;
+    item: string;
+    restaurant: string;
+    calories: number | null;
+    protein_g: number | null;
+    time: string;
+    portion_note: string;
+  }> = [];
+
+  let usedIndices = new Set<number>();
+  
+  for (let mealIndex = 0; mealIndex < 4; mealIndex++) {
+    const targetCal = mealCalorieTargets[mealIndex];
+    const targetProtein = mealProteinTargets[mealIndex];
+    
+    // Find best matching item (closest to target calories)
+    let bestMatch: { item: typeof diningItems[0]; index: number } | null = null;
+    let bestDiff = Infinity;
+    
+    for (let i = 0; i < diningItems.length; i++) {
+      if (usedIndices.has(i)) continue;
+      
+      const item = diningItems[i];
+      const itemCal = item.calories || 0;
+      const diff = Math.abs(itemCal - targetCal);
+      
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        bestMatch = { item, index: i };
+      }
+    }
+    
+    if (bestMatch) {
+      usedIndices.add(bestMatch.index);
+      const mealType = mealIndex === 0 ? "Breakfast" : mealIndex === 1 ? "Lunch" : mealIndex === 2 ? "Dinner" : "Snack";
+      selectedMeals.push({
+        id: bestMatch.item.id,
+        item: bestMatch.item.item,
+        restaurant: bestMatch.item.restaurant,
+        calories: bestMatch.item.calories,
+        protein_g: bestMatch.item.protein_g,
+        time: `${dayStart.toISOString().split("T")[0]}T${mealTimes[mealIndex]}:00:00.000Z`,
+        portion_note: `${mealType} from ${bestMatch.item.restaurant}. Enjoy mindfully and pair with water.`,
+      });
+    }
+  }
+
+  // If we don't have 4 meals, fill with remaining items
+  if (selectedMeals.length < 4) {
+    for (let i = 0; i < diningItems.length && selectedMeals.length < 4; i++) {
+      if (usedIndices.has(i)) continue;
+      const mealType = selectedMeals.length === 0 ? "Breakfast" : selectedMeals.length === 1 ? "Lunch" : selectedMeals.length === 2 ? "Dinner" : "Snack";
+      const timeIndex = selectedMeals.length;
+      selectedMeals.push({
+        id: diningItems[i].id,
+        item: diningItems[i].item,
+        restaurant: diningItems[i].restaurant,
+        calories: diningItems[i].calories,
+        protein_g: diningItems[i].protein_g,
+        time: `${dayStart.toISOString().split("T")[0]}T${mealTimes[timeIndex]}:00:00.000Z`,
+        portion_note: `${mealType} from ${diningItems[i].restaurant}. Enjoy mindfully and pair with water.`,
+      });
+      usedIndices.add(i);
+    }
+    
+    // If we still don't have 4 meals (not enough items in database), repeat items with different meal types
+    // This ensures we always return 4 meals even if database has fewer items
+    while (selectedMeals.length < 4 && diningItems.length > 0) {
+      const itemIndex = selectedMeals.length % diningItems.length;
+      const mealType = selectedMeals.length === 0 ? "Breakfast" : selectedMeals.length === 1 ? "Lunch" : selectedMeals.length === 2 ? "Dinner" : "Snack";
+      const timeIndex = selectedMeals.length;
+      const item = diningItems[itemIndex];
+      selectedMeals.push({
+        id: `${item.id}-${selectedMeals.length}`, // Make unique ID by appending index
+        item: item.item,
+        restaurant: item.restaurant,
+        calories: item.calories,
+        protein_g: item.protein_g,
+        time: `${dayStart.toISOString().split("T")[0]}T${mealTimes[timeIndex]}:00:00.000Z`,
+        portion_note: `${mealType} from ${item.restaurant}. Enjoy mindfully and pair with water.`,
+      });
+    }
+  }
+
+  // Ensure we always have exactly 4 meals
+  if (selectedMeals.length !== 4) {
+    console.warn(`[buildFallbackPlan] Expected 4 meals but got ${selectedMeals.length}. Dining items available: ${diningItems.length}`);
+  }
+
+  const meals = selectedMeals.slice(0, 4); // Ensure we never return more than 4
 
   const workouts = recClasses.slice(0, 1).map((cls) => ({
     id: cls.id,
@@ -503,6 +615,20 @@ export async function POST(request: NextRequest) {
 
       if (!parsed || !Array.isArray(parsed.meals) || !Array.isArray(parsed.workouts)) {
         throw new Error("Model output missing required fields.");
+      }
+
+      // Validate that we have 4 meals with different IDs
+      if (parsed.meals.length !== 4) {
+        console.warn(`[plan/generate] AI returned ${parsed.meals.length} meals instead of 4. Using fallback.`);
+        throw new Error("AI did not generate 4 meals");
+      }
+
+      // Check for duplicate IDs
+      const mealIds = parsed.meals.map(m => m.id);
+      const uniqueIds = new Set(mealIds);
+      if (uniqueIds.size < 4) {
+        console.warn(`[plan/generate] AI returned duplicate meal IDs. Unique IDs: ${uniqueIds.size}. Using fallback.`);
+        throw new Error("AI returned duplicate meal IDs");
       }
 
       const groundedMeals = await groundMeals(parsed.meals);

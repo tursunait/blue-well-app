@@ -51,13 +51,23 @@ export async function groundMeals(modelMeals: ModelMealOutput[]): Promise<Ground
       continue;
     }
 
+    // Convert time from HH:MM format to full ISO date string if needed
+    let timeISO = meal.time;
+    if (meal.time && !meal.time.includes("T") && meal.time.match(/^\d{2}:\d{2}$/)) {
+      // Time is in HH:MM format, convert to ISO string for today
+      const today = new Date();
+      const [hours, minutes] = meal.time.split(":");
+      today.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
+      timeISO = today.toISOString();
+    }
+
     grounded.push({
       id: meal.id,
       item: match.name,
       restaurant: match.vendor.name,
       calories: match.calories ?? null,
       protein_g: match.proteinG ?? null,
-      time: meal.time,
+      time: timeISO,
       portion_note: meal.portion_note,
     });
   }

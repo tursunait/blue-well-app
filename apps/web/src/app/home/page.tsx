@@ -1,10 +1,6 @@
 "use client";
 
-<<<<<<< HEAD
 import { useEffect, useMemo, useState } from "react";
-=======
-import { useState, useEffect } from "react";
->>>>>>> 0e367669077c9d7b11a5b69c5da432328af90a37
 import Image from "next/image";
 import {
   MyRecClassCard,
@@ -15,7 +11,6 @@ import {
   Button,
   FitnessGoalCard,
 } from "@halo/ui";
-<<<<<<< HEAD
 import { WellnessDisclaimer } from "@/components/WellnessDisclaimer";
 
 interface PlanResponse {
@@ -51,11 +46,6 @@ interface StatsResponse {
 }
 
 const todayISODate = () => new Date().toISOString().split("T")[0];
-=======
-import { AIChatbot } from "@/components/ai-chatbot";
-import { useNutrition } from "@/contexts/nutrition-context";
-import { getRandomMealDeliveryLink, type MealDeliveryLink } from "@/data/meal-delivery-links";
->>>>>>> 0e367669077c9d7b11a5b69c5da432328af90a37
 
 export default function HomePage() {
   const [plan, setPlan] = useState<PlanResponse | null>(null);
@@ -85,7 +75,6 @@ export default function HomePage() {
     return () => clearInterval(interval);
   }, []);
 
-<<<<<<< HEAD
   const loadPlan = async (refresh: boolean) => {
     try {
       setPlanError(null);
@@ -101,37 +90,6 @@ export default function HomePage() {
           refresh,
         }),
       });
-=======
-  // Meal delivery link state
-  const [currentDeliveryLink, setCurrentDeliveryLink] = useState<MealDeliveryLink | null>(null);
-  const [excludedUrls, setExcludedUrls] = useState<string[]>([]);
-
-  // Effect to update delivery link when meal selection changes
-  useEffect(() => {
-    if (selectedMeal) {
-      const newLink = getRandomMealDeliveryLink(selectedMeal, excludedUrls);
-      setCurrentDeliveryLink(newLink);
-    }
-  }, [selectedMeal, excludedUrls]);
-
-  // Handlers for meal delivery card
-  const handleMealDeliveryAccept = () => {
-    if (currentDeliveryLink) {
-      // Open the delivery service link in a new tab
-      window.open(currentDeliveryLink.url, '_blank');
-    }
-  };
-
-  const handleMealDeliverySkip = () => {
-    if (currentDeliveryLink && selectedMeal) {
-      // Add current URL to excluded list
-      setExcludedUrls((prev) => [...prev, currentDeliveryLink.url]);
-      // Get a new random link (excluding the ones we've seen)
-      const newLink = getRandomMealDeliveryLink(selectedMeal, [...excludedUrls, currentDeliveryLink.url]);
-      setCurrentDeliveryLink(newLink);
-    }
-  };
->>>>>>> 0e367669077c9d7b11a5b69c5da432328af90a37
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
@@ -273,7 +231,7 @@ export default function HomePage() {
               <div className="text-sm text-neutral-muted">Loading plan...</div>
             ) : plan && plan.meals.length > 0 ? (
               <div className="space-y-3">
-                {plan.meals.slice(0, 3).map((meal) => (
+                {plan.meals.map((meal) => (
                   <div
                     key={meal.id}
                     className="p-4 rounded-xl border border-neutral-border bg-neutral-white"
@@ -314,7 +272,7 @@ export default function HomePage() {
               <div className="text-sm text-neutral-muted">Loading workouts...</div>
             ) : plan && plan.workouts.length > 0 ? (
               <div className="space-y-3">
-                {plan.workouts.slice(0, 2).map((workout) => (
+                {plan.workouts.map((workout) => (
                   <div
                     key={workout.id}
                     className="p-4 rounded-xl border border-neutral-border bg-neutral-white"
@@ -364,35 +322,7 @@ export default function HomePage() {
           />
         )}
 
-<<<<<<< HEAD
         {timelineEvents.length > 0 && <Timeline events={timelineEvents} />}
-=======
-          {/* Meal Plan Recommendation with Dropdown */}
-          <MealPlanCard
-            mealOptions={mealOptions}
-            selectedMeal={selectedMeal}
-            onSelectMeal={(meal) => {
-              setSelectedMeal(meal);
-              setExcludedUrls([]); // Reset excluded URLs when new meal is selected
-              console.log("Selected meal:", meal);
-            }}
-          />
-
-          {/* Meal Delivery Recommendation - Only show when meal is selected */}
-          {currentDeliveryLink && selectedMeal && (
-            <MealDeliveryCard
-              restaurantName={currentDeliveryLink.restaurantName}
-              mealName={currentDeliveryLink.dishName}
-              deliveryService={currentDeliveryLink.service}
-              onAccept={handleMealDeliveryAccept}
-              onSkip={handleMealDeliverySkip}
-            />
-          )}
-        </div>
-
-        {/* Timeline - Next 6 hours */}
-        <Timeline events={timelineEvents} />
->>>>>>> 0e367669077c9d7b11a5b69c5da432328af90a37
       </div>
     </div>
   );
