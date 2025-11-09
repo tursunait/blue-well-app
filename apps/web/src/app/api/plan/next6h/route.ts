@@ -3,17 +3,29 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { generatePlanForWindow } from "@/ai/planner";
+import { getUserId, getDevUser } from "@/lib/auth-dev";
 
 export async function GET(request: NextRequest) {
+  // Get user ID - works in both dev and prod mode
   const session = await getServerSession(authOptions);
+  let userId = await getUserId(session);
   
-  if (!session?.user?.email) {
+  // Fallback: if no user ID and in dev mode, try to get dev user
+  if (!userId) {
+    try {
+      userId = await getDevUser();
+    } catch (error) {
+      console.error("Error getting dev user:", error);
+    }
+  }
+  
+  if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   
   try {
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { id: userId },
     });
     
     if (!user) {
@@ -31,7 +43,7 @@ export async function GET(request: NextRequest) {
       data: {
         userId: user.id,
         scope: "NEXT_6_HOURS",
-        payload: plan as any,
+        payload: JSON.stringify(plan),
         rationale: plan.rationale,
         date: new Date(),
       },

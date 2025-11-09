@@ -69,7 +69,19 @@ export default function PlanPage() {
         setTodayPlan(today);
       } else {
         const errorData = await todayRes.json().catch(() => ({}));
-        setError(errorData.error || "Failed to load today's plan");
+        console.error("Plan API error:", {
+          status: todayRes.status,
+          statusText: todayRes.statusText,
+          error: errorData
+        });
+        if (todayRes.status === 401) {
+          setError("Please sign in to view your plan. Click the button below to sign in.");
+        } else if (errorData.requiresOnboarding) {
+          setError("Please complete the onboarding survey to generate your personalized plan. Click the button below to start onboarding.");
+        } else {
+          const errorMsg = errorData.details || errorData.error || "Failed to load today's plan. Please try again.";
+          setError(errorMsg + (errorData.details ? ` (Details: ${errorData.details})` : ""));
+        }
       }
 
       // Load weekly plan
@@ -121,16 +133,38 @@ export default function PlanPage() {
         {/* Error State */}
         {error && (
           <Card className="border-0 shadow-soft border-red-200 bg-red-50">
-            <CardContent className="p-6">
+            <CardContent className="p-6 space-y-3">
               <p className="text-sm text-red-600">{error}</p>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={loadPlans}
-                className="mt-3"
-              >
-                Retry
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={loadPlans}
+                  className="mt-3"
+                >
+                  Retry
+                </Button>
+                {error.includes("sign in") && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => window.location.href = "/api/auth/signin"}
+                    className="mt-3"
+                  >
+                    Sign In
+                  </Button>
+                )}
+                {error.includes("onboarding") && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => window.location.href = "/onboarding"}
+                    className="mt-3"
+                  >
+                    Go to Onboarding
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
         )}
