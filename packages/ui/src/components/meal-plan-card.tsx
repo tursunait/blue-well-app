@@ -75,16 +75,18 @@ export const MealPlanCard: React.FC<MealPlanCardProps> = ({
           </div>
         </div>
       </CardContent>
-      <CardFooter className="flex gap-3 p-6 pt-0">
-        <Button
-          variant="ghost"
-          onClick={onSkip}
-          size="lg"
-          className="flex-1 rounded-full border border-neutral-border"
-        >
-          Skip
-        </Button>
-      </CardFooter>
+      {onSkip && (
+        <CardFooter className="flex gap-3 p-6 pt-0">
+          <Button
+            variant="ghost"
+            onClick={onSkip}
+            size="lg"
+            className="flex-1 rounded-full border border-neutral-border"
+          >
+            Skip
+          </Button>
+        </CardFooter>
+      )}
     </Card>
   );
 };
