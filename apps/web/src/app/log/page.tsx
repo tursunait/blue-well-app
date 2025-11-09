@@ -377,7 +377,7 @@ export default function LogPage() {
               type="steps"
               current={stepsCurrent}
               goal={stepsGoal}
-              title="Lose Weight"
+              title="Steps goal"
               subtitle="Steps:"
             />
             <FitnessGoalCard

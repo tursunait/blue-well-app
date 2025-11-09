@@ -266,7 +266,7 @@ export default function HomePage() {
               type="steps"
               current={stats?.steps.current ?? 0}
               goal={stats?.steps.goal ?? 0}
-              title="Steps"
+              title="Steps goal"
               subtitle="Today"
             />
             <FitnessGoalCard
