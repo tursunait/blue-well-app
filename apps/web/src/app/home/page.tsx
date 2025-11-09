@@ -83,7 +83,20 @@ export default function HomePage() {
       loadNearestClass();
     }, 30000);
 
-    return () => clearInterval(interval);
+    // Also refresh when page becomes visible (e.g., navigating back from log page)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        loadStats();
+        loadPlan(false);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, []);
 
   const loadPlan = async (refresh: boolean) => {

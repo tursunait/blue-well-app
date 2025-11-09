@@ -2,14 +2,26 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
+import { getUserId, getDevUser } from "@/lib/auth-dev";
 
 export async function POST(request: NextRequest) {
+  // Get user ID - works in both dev and prod mode
   const session = await getServerSession(authOptions);
-  
-  if (!session?.user?.email) {
+  let userId = await getUserId(session);
+
+  // Fallback: if no user ID and in dev mode, try to get dev user
+  if (!userId) {
+    try {
+      userId = await getDevUser();
+    } catch (error) {
+      console.error("Error getting dev user:", error);
+    }
+  }
+
+  if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  
+
   try {
     const body = await request.json();
     const {
@@ -22,9 +34,9 @@ export async function POST(request: NextRequest) {
       notes,
       source = "MANUAL",
     } = body;
-    
+
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { id: userId },
     });
     
     if (!user) {
@@ -97,6 +109,55 @@ export async function POST(request: NextRequest) {
     console.error("Error logging meal:", error);
     return NextResponse.json(
       { error: "Failed to log meal", details: error instanceof Error ? error.message : String(error) },
+      { status: 500 }
+    );
+  }
+}
+
+export async function GET(request: NextRequest) {
+  // Get user ID - works in both dev and prod mode
+  const session = await getServerSession(authOptions);
+  let userId = await getUserId(session);
+
+  // Fallback: if no user ID and in dev mode, try to get dev user
+  if (!userId) {
+    try {
+      userId = await getDevUser();
+    } catch (error) {
+      console.error("Error getting dev user:", error);
+    }
+  }
+
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    // Get today's date range
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Fetch today's food logs
+    const foodLogs = await prisma.foodLog.findMany({
+      where: {
+        userId: userId,
+        ts: {
+          gte: today,
+          lt: tomorrow,
+        },
+      },
+      orderBy: {
+        ts: "desc",
+      },
+    });
+
+    return NextResponse.json(foodLogs);
+  } catch (error) {
+    console.error("Error fetching food logs:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch food logs", details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

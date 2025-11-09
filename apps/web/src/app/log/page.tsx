@@ -13,6 +13,18 @@ interface Stats {
   steps: { current: number; goal: number; remaining: number };
 }
 
+interface FoodLog {
+  id: string;
+  itemName: string;
+  calories: number;
+  proteinG: number | null;
+  carbsG: number | null;
+  fatG: number | null;
+  restaurant: string | null;
+  ts: string;
+  source: string;
+}
+
 // BlueWell Log Meal - Fitness Goals + Auto-Detected Meal
 export default function LogPage() {
   // Get nutrition data from context
@@ -21,12 +33,31 @@ export default function LogPage() {
   // Fetch stats from API for consistency
   const [stats, setStats] = useState<Stats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
+  const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
 
   useEffect(() => {
     loadStats();
+    loadFoodLogs();
     // Refresh stats every 30 seconds
-    const interval = setInterval(loadStats, 30000);
-    return () => clearInterval(interval);
+    const interval = setInterval(() => {
+      loadStats();
+      loadFoodLogs();
+    }, 30000);
+
+    // Also refresh when page becomes visible
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        loadStats();
+        loadFoodLogs();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, []);
 
   const loadStats = async () => {
@@ -40,6 +71,18 @@ export default function LogPage() {
       console.error("Error loading stats:", err);
     } finally {
       setStatsLoading(false);
+    }
+  };
+
+  const loadFoodLogs = async () => {
+    try {
+      const response = await fetch("/api/log/meal");
+      if (response.ok) {
+        const data = await response.json();
+        setFoodLogs(data);
+      }
+    } catch (err) {
+      console.error("Error loading food logs:", err);
     }
   };
 
@@ -79,26 +122,53 @@ export default function LogPage() {
   // Calculated values for display
   const caloriesRemaining = caloriesGoal - caloriesConsumed; // Still calculate for summary
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (detectedMeal) {
       console.log("Meal confirmed:", detectedMeal);
 
-      // Add meal using context
-      addMeal({
-        name: detectedMeal.name,
-        calories: detectedMeal.calories,
-        protein: detectedMeal.protein,
-        carbs: detectedMeal.carbs,
-        fat: detectedMeal.fat,
-      });
+      try {
+        // Save meal to database via API
+        const response = await fetch("/api/log/meal", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            itemName: detectedMeal.name,
+            calories: detectedMeal.calories,
+            proteinG: detectedMeal.protein,
+            carbsG: detectedMeal.carbs,
+            fatG: detectedMeal.fat,
+            source: "PHOTO",
+          }),
+        });
 
-      // Clear the detected meal
-      setDetectedMeal(null);
-      
-      // Refresh stats after a short delay to allow backend to process
-      setTimeout(() => {
+        if (!response.ok) {
+          throw new Error("Failed to log meal");
+        }
+
+        const data = await response.json();
+        console.log("Meal logged successfully:", data);
+
+        // Also add to context for immediate UI update
+        addMeal({
+          name: detectedMeal.name,
+          calories: detectedMeal.calories,
+          protein: detectedMeal.protein,
+          carbs: detectedMeal.carbs,
+          fat: detectedMeal.fat,
+        });
+
+        // Clear the detected meal
+        setDetectedMeal(null);
+
+        // Refresh stats and food logs immediately to reflect the new totals
         loadStats();
-      }, 1000);
+        loadFoodLogs();
+      } catch (error) {
+        console.error("Error logging meal:", error);
+        alert("Failed to log meal. Please try again.");
+      }
     }
   };
 
@@ -472,11 +542,11 @@ export default function LogPage() {
         )}
 
         {/* Logged Meals History */}
-        {loggedMeals.length > 0 && (
+        {foodLogs.length > 0 && (
           <div className="space-y-4 mt-8">
             <h2 className="text-lg font-semibold text-neutral-dark">Today&apos;s Meals</h2>
             <div className="space-y-3">
-              {loggedMeals.map((meal) => (
+              {foodLogs.map((meal) => (
                 <div
                   key={meal.id}
                   className="bg-white rounded-xl p-4 shadow-soft border border-neutral-border"
@@ -484,14 +554,22 @@ export default function LogPage() {
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <h3 className="font-semibold text-neutral-dark">
-                        {meal.name}
+                        {meal.itemName}
                       </h3>
+                      {meal.restaurant && (
+                        <p className="text-xs text-neutral-muted">
+                          {meal.restaurant}
+                        </p>
+                      )}
                       <p className="text-sm text-neutral-text mt-1">
-                        {meal.calories} calories • {meal.protein}g protein • {meal.carbs}g carbs • {meal.fat}g fat
+                        {meal.calories} calories
+                        {meal.proteinG && ` • ${Math.round(meal.proteinG)}g protein`}
+                        {meal.carbsG && ` • ${Math.round(meal.carbsG)}g carbs`}
+                        {meal.fatG && ` • ${Math.round(meal.fatG)}g fat`}
                       </p>
                     </div>
                     <div className="text-xs text-neutral-muted">
-                      {meal.timestamp.toLocaleTimeString([], {
+                      {new Date(meal.ts).toLocaleTimeString([], {
                         hour: '2-digit',
                         minute: '2-digit'
                       })}
