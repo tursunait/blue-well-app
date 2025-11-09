@@ -1,184 +1,215 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { ChatBubble } from "@halo/ui";
-import { chatRequest, addCalendarEvent } from "@/lib/api";
-import { ChatMessage, Suggestion } from "@halo/types";
-import { Send } from "lucide-react";
+import { Card, CardContent, Button } from "@halo/ui";
 
-// AI Chatbot Page - Full page dedicated to AI assistant
+interface TodayPlan {
+  window: string;
+  totals: {
+    targetKcal: number;
+    remainingKcal: number;
+    estBurn?: number;
+    targetProteinG?: number;
+  };
+  items: Array<{
+    kind: "WORKOUT" | "MEAL" | "NUDGE";
+    title?: string;
+    start?: string;
+    end?: string;
+    location?: string;
+    source?: string;
+    intensity?: string;
+    vendor?: string;
+    calories?: number;
+    proteinG?: number;
+    when?: string;
+    text?: string;
+  }>;
+  rationale: string;
+  goalTips?: string[];
+}
+
+// Format time from ISO string
+function formatTime(isoString: string): string {
+  try {
+    const date = new Date(isoString);
+    return date.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+  } catch {
+    return "";
+  }
+}
+
+// Meal Plan Page - Snapshot of today's meal plan
 export default function AIPage() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
+  const [todayPlan, setTodayPlan] = useState<TodayPlan | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Fetch user profile for personalization
-  const { data: userProfile } = useQuery({
-    queryKey: ["userProfile"],
-    queryFn: async () => {
-      const response = await fetch("/api/profile");
-      if (!response.ok) return null;
-      return response.json();
-    },
-  });
+  useEffect(() => {
+    loadPlan();
+  }, []);
 
-  const sendMessage = useMutation({
-    mutationFn: async (message: string) => {
-      const conversationHistory = messages
-        .slice(-5)
-        .map((msg) => ({
-          role: msg.role,
-          content: msg.content,
-        }));
+  const loadPlan = async () => {
+    try {
+      setError(null);
+      setLoading(true);
 
-      return chatRequest(message, undefined, conversationHistory, userProfile || undefined);
-    },
-    onSuccess: (data, message) => {
-      const userMessage: ChatMessage = {
-        id: Date.now().toString(),
-        role: "user",
-        content: message,
-        timestamp: new Date().toISOString(),
-      };
-      const aiMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: data.message || "Here are some suggestions:",
-        suggestions: data.suggestions,
-        timestamp: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, userMessage, aiMessage]);
-      setInput("");
-    },
-    onError: (error) => {
-      console.error("Chat error:", error);
-      const errorMessage: ChatMessage = {
-        id: Date.now().toString(),
-        role: "assistant",
-        content: "Sorry, I'm having trouble connecting. Please make sure the API server is running on port 8000.",
-        timestamp: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-    },
-  });
-
-  const handleSuggestionAction = async (suggestion: Suggestion) => {
-    if (suggestion.kind === "class" && suggestion.payload) {
-      console.log("Reserve class:", suggestion);
-    } else if (suggestion.kind === "workout" || suggestion.kind === "meal") {
-      if (suggestion.payload?.startISO && suggestion.payload?.endISO) {
-        try {
-          await addCalendarEvent({
-            title: suggestion.title,
-            startISO: suggestion.payload.startISO,
-            endISO: suggestion.payload.endISO,
-            location: suggestion.payload.location,
-            notes: suggestion.desc,
-          });
-        } catch (error) {
-          console.error("Failed to add to calendar:", error);
+      const response = await fetch("/api/plan/today");
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error("Please sign in to view your meal plan");
+        } else if (response.status === 404) {
+          throw new Error("Please complete onboarding to get your meal plan");
         }
+        throw new Error("Failed to load meal plan");
       }
+
+      const data = await response.json();
+      setTodayPlan(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load meal plan");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const quickReplies = [
-    "What workout should I do?",
-    "Suggest a meal",
-    "Find a class",
-    "What's my plan today?",
-  ];
+  // Filter only meal items
+  const mealItems = todayPlan?.items.filter((item) => item.kind === "MEAL") || [];
 
   return (
-    <div className="flex h-screen flex-col bg-neutral-bg pb-24">
-      {/* Header with Logo */}
-      <div className="border-b border-neutral-border bg-neutral-white px-6 py-4">
-        <div className="flex items-center gap-3 mb-2">
-          <Image
-            src="/img/logo_icon.png"
-            alt="BlueWell"
-            width={32}
-            height={32}
-            className="object-contain"
-            priority
-          />
-          <h1 className="text-xl font-semibold text-neutral-dark">AI Assistant</h1>
-        </div>
-        <p className="text-sm text-neutral-muted mt-1">
-          Ask me anything about workouts, meals, classes, or your daily plan
-        </p>
-      </div>
-
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-        {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full space-y-4 text-center">
-            <p className="text-lg text-neutral-text">How can I help you today?</p>
-            <div className="flex flex-wrap gap-3 justify-center max-w-md">
-              {quickReplies.map((reply) => (
-                <button
-                  key={reply}
-                  onClick={() => {
-                    setInput(reply);
-                    sendMessage.mutate(reply);
-                  }}
-                  className="px-4 py-2 rounded-xl bg-neutral-white border border-neutral-border text-sm text-neutral-text hover:border-accent-light hover:text-bluewell-royal transition-colors"
-                >
-                  {reply}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : (
-          messages.map((msg) => (
-            <ChatBubble
-              key={msg.id}
-              role={msg.role}
-              content={msg.content}
-              suggestions={msg.suggestions}
-              timestamp={msg.timestamp}
-              onSuggestionAction={handleSuggestionAction}
+    <div className="min-h-screen bg-neutral-bg pb-24">
+      <div className="mx-auto max-w-2xl space-y-6 p-6">
+        {/* Header */}
+        <div className="pt-8 space-y-2">
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <Image
+              src="/img/logo_icon.png"
+              alt="BlueWell"
+              width={40}
+              height={40}
+              className="object-contain"
+              priority
             />
-          ))
-        )}
-        {sendMessage.isPending && (
-          <div className="flex justify-start">
-            <div className="rounded-2xl bg-neutral-white border border-neutral-border px-5 py-3">
-              <p className="text-base text-neutral-muted">thinking...</p>
-            </div>
+            <h1 className="text-3xl font-semibold text-neutral-dark">Your meal plan for today</h1>
           </div>
-        )}
-      </div>
-
-      {/* Input */}
-      <div className="border-t border-neutral-border bg-neutral-white px-6 py-4">
-        <div className="flex gap-3 items-end">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && input.trim() && !sendMessage.isPending) {
-                sendMessage.mutate(input);
-              }
-            }}
-            placeholder="Ask me anything..."
-            className="flex-1 h-14 rounded-xl border-2 border-neutral-border bg-neutral-white px-5 text-base focus:border-accent-light focus:outline-none focus:ring-2 focus:ring-accent-light/20 transition-colors"
-            disabled={sendMessage.isPending}
-          />
-          <button
-            onClick={() => {
-              if (input.trim() && !sendMessage.isPending) {
-                sendMessage.mutate(input);
-              }
-            }}
-            disabled={!input.trim() || sendMessage.isPending}
-            className="h-14 w-14 rounded-xl bg-bluewell-royal text-white hover:bg-bluewell-navy disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
-          >
-            <Send className="h-5 w-5" />
-          </button>
         </div>
+
+        {/* Loading State */}
+        {loading && (
+          <Card className="border-0 shadow-soft">
+            <CardContent className="p-6">
+              <p className="text-center text-neutral-text">Loading your meal plan...</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <Card className="border-0 shadow-soft border-red-200 bg-red-50">
+            <CardContent className="p-6 space-y-3">
+              <p className="text-sm text-red-600">{error}</p>
+              <div className="flex gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={loadPlan}
+                  className="mt-3"
+                >
+                  Retry
+                </Button>
+                {error.includes("sign in") && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => window.location.href = "/api/auth/signin"}
+                    className="mt-3"
+                  >
+                    Sign In
+                  </Button>
+                )}
+                {error.includes("onboarding") && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => window.location.href = "/onboarding"}
+                    className="mt-3"
+                  >
+                    Go to Onboarding
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Meal Plan */}
+        {!loading && !error && todayPlan && (
+          <Card className="border-0 shadow-soft">
+            <CardContent className="p-6 space-y-4">
+              <div className="flex justify-between items-center">
+                <h2 className="text-lg font-semibold text-neutral-dark">Today's Meals</h2>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={loadPlan}
+                  className="text-sm"
+                >
+                  Refresh
+                </Button>
+              </div>
+
+              {/* Meal Items */}
+              {mealItems.length > 0 ? (
+                <div className="space-y-3">
+                  {mealItems.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="p-4 rounded-xl border border-neutral-border bg-neutral-white"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-neutral-dark">
+                          {item.title || "Meal"}
+                        </span>
+                        {item.when && (
+                          <span className="text-xs text-neutral-muted">{formatTime(item.when)}</span>
+                        )}
+                      </div>
+                      {item.vendor && (
+                        <div className="text-xs text-neutral-muted mt-1">{item.vendor}</div>
+                      )}
+                      {item.calories && (
+                        <div className="text-xs text-neutral-muted mt-1">
+                          {item.calories} kcal
+                          {item.proteinG && ` • ${item.proteinG}g protein`}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-sm text-neutral-muted">
+                    No meals planned for today. Check back later or refresh to get recommendations.
+                  </p>
+                </div>
+              )}
+
+              {/* Rationale */}
+              {todayPlan.rationale && (
+                <div className="pt-4 border-t border-neutral-border">
+                  <p className="text-xs text-neutral-text leading-relaxed">
+                    {todayPlan.rationale}
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

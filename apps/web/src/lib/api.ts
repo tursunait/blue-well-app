@@ -1,5 +1,5 @@
 const FASTAPI_BASE_URL = process.env.NEXT_PUBLIC_FASTAPI_BASE_URL || "http://localhost:8000";
-const CALORIE_ESTIMATOR_BASE_URL = process.env.NEXT_PUBLIC_CALORIE_ESTIMATOR_URL || "http://localhost:8000";
+const CALORIE_ESTIMATOR_BASE_URL = process.env.NEXT_PUBLIC_CALORIE_ESTIMATOR_URL || "http://localhost:8001";
 
 export async function chatRequest(
   message: string,

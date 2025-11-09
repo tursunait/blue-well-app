@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
       try {
         userId = await getDevUser();
       } catch (error) {
-        console.warn("[log/photo] Failed to get dev user:", error);
+        console.warn("[log/text] Failed to get dev user:", error);
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
     }
@@ -33,7 +33,11 @@ export async function POST(request: NextRequest) {
     }
     
     const body = await request.json();
-    const { image, imageUrl } = body; // base64 image or URL
+    const { foodDescription } = body;
+    
+    if (!foodDescription || typeof foodDescription !== "string") {
+      return NextResponse.json({ error: "Missing food description" }, { status: 400 });
+    }
     
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -43,41 +47,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
     
-    // Use OpenAI Vision to analyze image
-    const imageData = image || imageUrl;
-    if (!imageData) {
-      return NextResponse.json({ error: "Missing image" }, { status: 400 });
-    }
+    // Use OpenAI to estimate nutrition from text description
+    const prompt = `Estimate the nutrition information for this food: "${foodDescription}". Return a JSON object with: name (string), calories (number), proteinG (number), carbsG (number), fatG (number). Be as accurate as possible. If uncertain, provide reasonable estimates.`;
     
-    // Use retry wrapper for OpenAI Vision API calls
-    const visionResponse = await withRetry(
+    const textResponse = await withRetry(
       () =>
         openai.chat.completions.create({
           model: "gpt-4o-mini",
           messages: [
             {
               role: "user",
-              content: [
-                {
-                  type: "text",
-                  text: "Analyze this food image and return a JSON object with: name (string), calories (number), proteinG (number), carbsG (number), fatG (number). Be as accurate as possible. If uncertain, provide estimates and mark as estimate: true.",
-                },
-                {
-                  type: "image_url",
-                  image_url: {
-                    url: imageData.startsWith("data:") ? imageData : `data:image/jpeg;base64,${imageData}`,
-                  },
-                },
-              ],
+              content: prompt,
             },
           ],
           response_format: { type: "json_object" },
-          max_tokens: 500,
+          temperature: 0.3,
         }),
       { retries: 2, baseMs: 500 }
     );
     
-    const analysis = JSON.parse(visionResponse.choices[0].message.content || "{}");
+    const analysis = JSON.parse(textResponse.choices[0].message.content || "{}");
     const {
       name,
       calories,
@@ -89,12 +78,12 @@ export async function POST(request: NextRequest) {
     
     if (!name || !calories) {
       return NextResponse.json(
-        { error: "Could not identify food from image" },
+        { error: "Could not estimate nutrition from description" },
         { status: 400 }
       );
     }
     
-    // Try to match with menu items using semantic similarity (fuzzy matching with strict threshold)
+    // Try to match with menu items using semantic similarity
     let matchedItemId: string | null = null;
     let matchedItem: any = null;
     let finalRestaurant: string | undefined = undefined;
@@ -105,7 +94,7 @@ export async function POST(request: NextRequest) {
         where: {
           embedding: { not: null },
         },
-        include: { vendor: true }, // Include vendor for restaurant name
+        include: { vendor: true },
         take: 50,
       });
       
@@ -122,38 +111,36 @@ export async function POST(request: NextRequest) {
         }
       }
       
-      // Strict threshold: only use DB nutrition if similarity > 0.7 (high confidence)
-      // Below threshold, fall back to manual confirmation (no hallucinations)
+      // Strict threshold: only use DB nutrition if similarity > 0.7
       if (bestMatch && bestMatch.similarity > 0.7) {
         matchedItem = bestMatch.item;
         matchedItemId = matchedItem.id;
-        finalRestaurant = matchedItem.vendor.name; // EXACT restaurant name from database
+        finalRestaurant = matchedItem.vendor.name;
       }
     } catch (error) {
       console.error("Error matching with menu items:", error);
     }
     
-    // Use DB nutrition if matched with high confidence, otherwise use AI estimates
-    // If similarity < 0.7, return AI estimate and let user confirm (no auto-mapping)
+    // Use DB nutrition if matched, otherwise use AI estimates
     const finalCalories = matchedItem?.calories || calories;
     const finalProtein = matchedItem?.proteinG || proteinG;
     const finalCarbs = matchedItem?.carbsG || carbsG;
     const finalFat = matchedItem?.fatG || fatG;
     const finalName = matchedItem?.name || name;
     
-    // Create food log with restaurant if matched
+    // Create food log
     const foodLog = await prisma.foodLog.create({
       data: {
         userId: user.id,
         itemName: finalName,
-        restaurant: finalRestaurant || null, // EXACT restaurant name if matched
-        menuItemId: matchedItemId || null, // Link to MenuItem if matched
+        restaurant: finalRestaurant || null,
+        menuItemId: matchedItemId || null,
         calories: finalCalories,
         proteinG: finalProtein,
         carbsG: finalCarbs,
         fatG: finalFat,
-        notes: !matchedItem && estimate ? "AI estimate - please confirm" : null,
-        source: matchedItem ? "MENU_PICK" : "PHOTO_AI",
+        notes: !matchedItem && estimate ? "AI estimate from text - please confirm" : null,
+        source: matchedItem ? "MENU_PICK" : "TEXT_AI",
         ts: new Date(),
       },
     });
@@ -161,27 +148,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       id: foodLog.id,
       name: finalName,
-      restaurant: finalRestaurant, // EXACT restaurant name if matched
-      menuItemId: matchedItemId, // MenuItem ID if matched
+      restaurant: finalRestaurant,
+      menuItemId: matchedItemId,
       calories: finalCalories,
       proteinG: finalProtein,
       carbsG: finalCarbs,
       fatG: finalFat,
       matched: !!matchedItem,
       estimate: !matchedItem && estimate,
-      requiresConfirmation: !matchedItem, // If not matched, requires user confirmation
+      requiresConfirmation: !matchedItem,
     });
   } catch (error: any) {
-    console.error("Error processing photo:", error);
+    console.error("Error processing text description:", error);
     const is429 = error?.status === 429 || error?.code === "insufficient_quota";
     const errorMessage = is429
       ? "OpenAI quota exceeded. Please try again later."
       : error instanceof Error
       ? error.message
-      : "Failed to process photo";
+      : "Failed to process text description";
     
     return NextResponse.json(
-      { error: "Failed to process photo", details: errorMessage },
+      { error: "Failed to process text description", details: errorMessage },
       { status: is429 ? 429 : 500 }
     );
   }

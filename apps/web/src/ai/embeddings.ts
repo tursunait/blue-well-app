@@ -44,7 +44,17 @@ export async function embedMenuItems(itemIds?: string[]): Promise<number> {
     const texts = batch.map((item) => {
       const parts = [item.name];
       if (item.description) parts.push(item.description);
-      if (item.tags && item.tags.length > 0) parts.push(item.tags.join(", "));
+      // Parse tags from JSON string (SQLite stores as string)
+      if (item.tags) {
+        try {
+          const tags = typeof item.tags === 'string' ? JSON.parse(item.tags) : item.tags;
+          if (Array.isArray(tags) && tags.length > 0) {
+            parts.push(tags.join(", "));
+          }
+        } catch (e) {
+          // If parsing fails, skip tags
+        }
+      }
       return parts.join(". ");
     });
 

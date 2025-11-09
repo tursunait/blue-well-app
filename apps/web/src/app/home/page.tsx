@@ -1,54 +1,173 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import {
-  DailyGoalProgress,
   MyRecClassCard,
-  MealPlanCard,
-  MealDeliveryCard,
   Timeline,
   TimelineEvent,
+  Card,
+  CardContent,
+  Button,
+  FitnessGoalCard,
 } from "@halo/ui";
-import { AIChatbot } from "@/components/ai-chatbot";
-import { useNutrition } from "@/contexts/nutrition-context";
+import { WellnessDisclaimer } from "@/components/WellnessDisclaimer";
 
-// BlueWell Home - Your Day, Optimized
+interface PlanResponse {
+  day: string;
+  targets: {
+    kcal: number;
+    protein_g: number;
+  };
+  meals: Array<{
+    id: string;
+    item: string;
+    restaurant: string;
+    calories: number | null;
+    protein_g: number | null;
+    time?: string;
+    portion_note?: string;
+  }>;
+  workouts: Array<{
+    id: string;
+    title: string;
+    location?: string | null;
+    start_time?: string;
+    end_time?: string;
+    intensity?: string;
+    note?: string;
+  }>;
+}
+
+interface StatsResponse {
+  calories: { consumed: number; goal: number; remaining: number; burned: number };
+  protein: { consumed: number; goal: number; remaining: number };
+  steps: { current: number; goal: number; remaining: number };
+}
+
+const todayISODate = () => new Date().toISOString().split("T")[0];
+
 export default function HomePage() {
-  // Get nutrition data from context
-  const { caloriesConsumed, caloriesGoal, proteinConsumed, proteinGoal } = useNutrition();
+  const [plan, setPlan] = useState<PlanResponse | null>(null);
+  const [stats, setStats] = useState<StatsResponse | null>(null);
+  const [planLoading, setPlanLoading] = useState(true);
+  const [planError, setPlanError] = useState<string | null>(null);
+  const [myRecClass, setMyRecClass] = useState<{
+    title: string;
+    time: string;
+    startTime?: string;
+    endTime?: string;
+    location?: string;
+  } | null>(null);
+  const [classLoading, setClassLoading] = useState(true);
 
-  const stepsCurrent = 8000;
-  const stepsGoal = 10000;
+  useEffect(() => {
+    loadPlan(false);
+    loadStats();
+    loadNearestClass();
 
-  // MyRec class recommendation
-  const [myRecClass, setMyRecClass] = useState({
-    title: "Full Body Strength",
-    time: "5:30 PM",
-  });
+    const interval = setInterval(() => {
+      loadPlan(false);
+      loadStats();
+      loadNearestClass();
+    }, 30000);
 
-  // Meal plan options
-  const mealOptions = ["Mediterranean Bowl", "Grilled Chicken Salad", "Quinoa Power Bowl"];
-  const [selectedMeal, setSelectedMeal] = useState<string | undefined>();
+    return () => clearInterval(interval);
+  }, []);
 
-  // Meal delivery recommendation
-  const [mealDelivery, setMealDelivery] = useState({
-    restaurant: "Yoprea",
-    meal: "Mediterranean Bowl",
-    service: "Grubhub" as "Grubhub" | "Uber Eats" | "DoorDash",
-  });
+  const loadPlan = async (refresh: boolean) => {
+    try {
+      setPlanError(null);
+      setPlanLoading(true);
+      const response = await fetch("/api/plan/generate", {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          day: todayISODate(),
+          refresh,
+        }),
+      });
 
-  // Timeline events for next 6 hours
-  const timelineEvents: TimelineEvent[] = [
-    { id: "1", label: "Workout", time: "6:00 PM", color: "green" },
-    { id: "2", label: "Meal", time: "7:30 PM", color: "blue" },
-    { id: "3", label: "Yoga Class", time: "8:15 PM", color: "purple" },
-  ];
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        const message = data.error || data.details || "Unable to load plan.";
+        throw new Error(message);
+      }
+
+      const data = (await response.json()) as PlanResponse;
+      setPlan(data);
+    } catch (error) {
+      console.error("[home/page] Error loading plan:", error);
+      setPlanError(
+        error instanceof Error ? error.message : "Unable to load plan right now."
+      );
+    } finally {
+      setPlanLoading(false);
+    }
+  };
+
+  const loadStats = async () => {
+    try {
+      const response = await fetch("/api/stats/today", { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error("Failed to load stats");
+      }
+      const data = (await response.json()) as StatsResponse;
+      setStats(data);
+    } catch (error) {
+      console.error("[home/page] Error loading stats:", error);
+    }
+  };
+
+  const isLoading = planLoading && !plan;
+
+  const loadNearestClass = async () => {
+    try {
+      const response = await fetch("/api/rec/nearest-class", { cache: "no-store" });
+      if (response.ok) {
+        const data = await response.json();
+        setMyRecClass(data.class ?? null);
+      }
+    } catch (error) {
+      console.error("[home/page] Error loading nearest class:", error);
+    } finally {
+      setClassLoading(false);
+    }
+  };
+
+  const formatTime = (isoString?: string) => {
+    if (!isoString) return "";
+    try {
+      const date = new Date(isoString);
+      return date.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+    } catch {
+      return "";
+    }
+  };
+
+  const timelineEvents: TimelineEvent[] = useMemo(() => {
+    if (!plan) return [];
+    return plan.workouts
+      .filter((workout) => Boolean(workout.start_time))
+      .slice(0, 3)
+      .map((workout, index) => ({
+        id: workout.id,
+        label: workout.title,
+        time: workout.start_time ? formatTime(workout.start_time) : "",
+        color: ["blue", "green", "purple"][index % 3],
+      }));
+  }, [plan]);
 
   return (
     <div className="min-h-screen bg-neutral-bg pb-24">
       <div className="mx-auto max-w-2xl space-y-6 p-6">
-        {/* Header with Logo */}
         <div className="pt-8 space-y-4">
           <div className="flex items-center justify-center gap-3">
             <Image
@@ -63,79 +182,147 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Daily Progress Goals - 3 circular indicators */}
-        <div className="grid grid-cols-3 gap-4">
-          <DailyGoalProgress
-            label="Calories"
-            current={caloriesConsumed}
-            goal={caloriesGoal}
-            color="blue"
-            showRemaining={false}
-          />
-          <DailyGoalProgress
-            label="Steps"
-            current={stepsCurrent}
-            goal={stepsGoal}
-            color="green"
-          />
-          <DailyGoalProgress
-            label="Protein"
-            current={proteinConsumed}
-            goal={proteinGoal}
-            color="purple"
-          />
+        <WellnessDisclaimer />
+
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold text-neutral-dark">Fitness Goals</h2>
+          <div className="grid grid-cols-3 gap-3">
+            <FitnessGoalCard
+              type="calories"
+              current={stats?.calories.consumed ?? 0}
+              goal={stats?.calories.goal ?? 0}
+              title="Calories Consumed"
+            />
+            <FitnessGoalCard
+              type="steps"
+              current={stats?.steps.current ?? 0}
+              goal={stats?.steps.goal ?? 0}
+              title="Steps"
+              subtitle="Today"
+            />
+            <FitnessGoalCard
+              type="protein"
+              current={stats?.protein.consumed ?? 0}
+              goal={stats?.protein.goal ?? 0}
+              title="Protein"
+            />
+          </div>
         </div>
 
-        {/* AI Recommendations Section */}
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-neutral-dark">AI Recommendations</h2>
+        <Card className="border-0 shadow-soft">
+          <CardContent className="p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-neutral-dark">Today's Meals</h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => loadPlan(true)}
+                disabled={planLoading}
+              >
+                Refresh
+              </Button>
+            </div>
 
-          {/* AI Chatbot */}
-          <AIChatbot />
+            {planError && (
+              <div className="text-sm text-red-600">{planError}</div>
+            )}
 
-          {/* MyRec Class Recommendation */}
+            {planLoading ? (
+              <div className="text-sm text-neutral-muted">Loading plan...</div>
+            ) : plan && plan.meals.length > 0 ? (
+              <div className="space-y-3">
+                {plan.meals.slice(0, 3).map((meal) => (
+                  <div
+                    key={meal.id}
+                    className="p-4 rounded-xl border border-neutral-border bg-neutral-white"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-neutral-dark">
+                        {meal.item}
+                      </span>
+                      {meal.time && (
+                        <span className="text-xs text-neutral-muted">{formatTime(meal.time)}</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-neutral-muted mt-1">{meal.restaurant}</div>
+                    <div className="text-xs text-neutral-muted mt-1">
+                      {meal.calories ?? "—"} kcal
+                      {meal.protein_g !== null && typeof meal.protein_g !== "undefined"
+                        ? ` • ${meal.protein_g}g protein`
+                        : ""}
+                    </div>
+                    {meal.portion_note && (
+                      <div className="text-xs text-neutral-muted mt-2">{meal.portion_note}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-neutral-muted">No meals planned yet.</div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-soft">
+          <CardContent className="p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-neutral-dark">Workouts</h2>
+            </div>
+            {planLoading ? (
+              <div className="text-sm text-neutral-muted">Loading workouts...</div>
+            ) : plan && plan.workouts.length > 0 ? (
+              <div className="space-y-3">
+                {plan.workouts.slice(0, 2).map((workout) => (
+                  <div
+                    key={workout.id}
+                    className="p-4 rounded-xl border border-neutral-border bg-neutral-white"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-neutral-dark">
+                        {workout.title}
+                      </span>
+                      {workout.start_time && (
+                        <span className="text-xs text-neutral-muted">
+                          {formatTime(workout.start_time)}
+                        </span>
+                      )}
+                    </div>
+                    {workout.location && (
+                      <div className="text-xs text-neutral-muted mt-1">
+                        {workout.location}
+                      </div>
+                    )}
+                    {workout.intensity && (
+                      <div className="text-xs text-neutral-muted mt-1">
+                        Intensity: {workout.intensity}
+                      </div>
+                    )}
+                    {workout.note && (
+                      <div className="text-xs text-neutral-muted mt-2">{workout.note}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-neutral-muted">No workouts scheduled.</div>
+            )}
+          </CardContent>
+        </Card>
+
+        {!classLoading && myRecClass && (
           <MyRecClassCard
             classTitle={myRecClass.title}
             time={myRecClass.time}
             onAccept={() => {
-              console.log("Accepted MyRec class");
-              // Add logic to register for class
+              console.log("Accepted MyRec class:", myRecClass);
             }}
             onSkip={() => {
-              console.log("Skipped MyRec class");
+              setMyRecClass(null);
             }}
           />
+        )}
 
-          {/* Meal Plan Recommendation with Dropdown */}
-          <MealPlanCard
-            mealOptions={mealOptions}
-            selectedMeal={selectedMeal}
-            onSelectMeal={(meal) => {
-              setSelectedMeal(meal);
-              console.log("Selected meal:", meal);
-            }}
-            onSkip={() => {
-              console.log("Skipped meal plan");
-            }}
-          />
-
-          {/* Meal Delivery Recommendation */}
-          <MealDeliveryCard
-            restaurantName={mealDelivery.restaurant}
-            mealName={mealDelivery.meal}
-            deliveryService={mealDelivery.service}
-            onAccept={() => {
-              console.log("Accepted meal delivery");
-              // Add logic to open delivery app
-            }}
-            onSkip={() => {
-              console.log("Skipped meal delivery");
-            }}
-          />
-        </div>
-
-        {/* Timeline - Next 6 hours */}
-        <Timeline events={timelineEvents} />
+        {timelineEvents.length > 0 && <Timeline events={timelineEvents} />}
       </div>
     </div>
   );

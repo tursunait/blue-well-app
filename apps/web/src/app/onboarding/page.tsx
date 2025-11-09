@@ -118,6 +118,7 @@ export default function OnboardingPage() {
   const [error, setError] = useState<string | null>(null);
   const [isComplete, setIsComplete] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   // Ensure component is mounted before rendering
   useEffect(() => {
@@ -279,6 +280,53 @@ export default function OnboardingPage() {
     }
   };
 
+  const handleReset = async () => {
+    if (!confirm("Are you sure you want to restart the survey? All your progress will be lost.")) {
+      return;
+    }
+
+    setIsResetting(true);
+    setError(null);
+
+    try {
+      // Clear localStorage
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("bluewell-onboarding");
+      }
+
+      // Reset database data via API
+      const response = await fetch("/api/survey/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (!response.ok) {
+        console.warn("API reset failed, but continuing with local reset");
+      }
+
+      // Reset local state
+      setAnswers({});
+      setCurrentIndex(0);
+      setUnits({ heightUnit: "cm", weightUnit: "kg" });
+      setIsComplete(false);
+
+      // Small delay to show reset happened
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    } catch (err) {
+      console.error("Error resetting survey:", err);
+      // Still reset local state even if API fails
+      setAnswers({});
+      setCurrentIndex(0);
+      setUnits({ heightUnit: "cm", weightUnit: "kg" });
+      setIsComplete(false);
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("bluewell-onboarding");
+      }
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   const handleChange = (value: any) => {
     setAnswers({ ...answers, [currentQuestion.id]: value });
     setError(null);
@@ -355,16 +403,32 @@ export default function OnboardingPage() {
   return (
     <div className="min-h-screen bg-neutral-bg flex flex-col items-center justify-center p-6 pb-24">
       <div className="w-full max-w-lg space-y-6">
-        {/* Logo */}
-        <div className="flex justify-center pt-4">
-          <Image
-            src="/img/logo_icon.png"
-            alt="BlueWell"
-            width={48}
-            height={48}
-            className="object-contain"
-            priority
-          />
+        {/* Logo and Reset Button */}
+        <div className="flex justify-between items-center pt-4">
+          <div className="flex-1"></div>
+          <div className="flex-1 flex justify-center">
+            <Image
+              src="/img/logo_icon.png"
+              alt="BlueWell"
+              width={48}
+              height={48}
+              className="object-contain"
+              priority
+            />
+          </div>
+          <div className="flex-1 flex justify-end">
+            {validIndex > 0 && (
+              <Button
+                onClick={handleReset}
+                disabled={isResetting}
+                variant="ghost"
+                size="sm"
+                className="text-xs text-neutral-text hover:text-neutral-dark"
+              >
+                {isResetting ? "Resetting..." : "Restart"}
+              </Button>
+            )}
+          </div>
         </div>
         
         {/* Circular Progress Indicator */}

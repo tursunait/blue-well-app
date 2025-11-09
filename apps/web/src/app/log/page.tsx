@@ -1,19 +1,55 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { FitnessGoalCard, AutoDetectedMeal } from "@halo/ui";
 import { Camera, PenSquare } from "lucide-react";
 import { estimateCalories, estimateCaloriesFromText, type CalorieEstimateResponse } from "@/lib/api";
 import { useNutrition } from "@/contexts/nutrition-context";
 
+interface Stats {
+  calories: { consumed: number; goal: number; remaining: number; burned: number };
+  protein: { consumed: number; goal: number; remaining: number };
+  steps: { current: number; goal: number; remaining: number };
+}
+
 // BlueWell Log Meal - Fitness Goals + Auto-Detected Meal
 export default function LogPage() {
   // Get nutrition data from context
-  const { caloriesConsumed, caloriesGoal, proteinConsumed, proteinGoal, loggedMeals, addMeal } = useNutrition();
+  const { loggedMeals, addMeal } = useNutrition();
+  
+  // Fetch stats from API for consistency
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
 
-  const stepsCurrent = 8500;
-  const stepsGoal = 10000;
+  useEffect(() => {
+    loadStats();
+    // Refresh stats every 30 seconds
+    const interval = setInterval(loadStats, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const loadStats = async () => {
+    try {
+      const response = await fetch("/api/stats/today");
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data);
+      }
+    } catch (err) {
+      console.error("Error loading stats:", err);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+  // Use API stats if available, fallback to context
+  const caloriesConsumed = stats?.calories.consumed ?? 0;
+  const caloriesGoal = stats?.calories.goal ?? 1800;
+  const proteinConsumed = stats?.protein.consumed ?? 0;
+  const proteinGoal = stats?.protein.goal ?? 120;
+  const stepsCurrent = stats?.steps.current ?? 0;
+  const stepsGoal = stats?.steps.goal ?? 10000;
 
   // File input ref
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -58,6 +94,11 @@ export default function LogPage() {
 
       // Clear the detected meal
       setDetectedMeal(null);
+      
+      // Refresh stats after a short delay to allow backend to process
+      setTimeout(() => {
+        loadStats();
+      }, 1000);
     }
   };
 

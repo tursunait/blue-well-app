@@ -31,16 +31,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
     
-    // If menuItemId provided, fetch nutrition from DB
+    // If menuItemId provided, fetch nutrition and restaurant from DB
     let finalCalories = calories;
     let finalProtein = proteinG;
     let finalCarbs = carbsG;
     let finalFat = fatG;
     let finalName = itemName;
+    let finalRestaurant: string | undefined = undefined;
     
     if (menuItemId) {
       const menuItem = await prisma.menuItem.findUnique({
         where: { id: menuItemId },
+        include: { vendor: true },
       });
       
       if (menuItem) {
@@ -49,7 +51,14 @@ export async function POST(request: NextRequest) {
         finalCarbs = menuItem.carbsG || carbsG;
         finalFat = menuItem.fatG || fatG;
         finalName = menuItem.name;
+        finalRestaurant = menuItem.vendor.name; // EXACT restaurant name from database
       }
+    }
+    
+    // Also accept restaurant from body if provided (for manual entry)
+    const restaurantFromBody = body.restaurant as string | undefined;
+    if (restaurantFromBody) {
+      finalRestaurant = restaurantFromBody;
     }
     
     if (!finalCalories || !finalName) {
@@ -59,11 +68,13 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Create food log
+    // Create food log with exact restaurant name from database
     const foodLog = await prisma.foodLog.create({
       data: {
         userId: user.id,
         itemName: finalName,
+        restaurant: finalRestaurant || null, // EXACT restaurant name from MenuVendor
+        menuItemId: menuItemId || null, // Link to MenuItem if from database
         calories: finalCalories,
         proteinG: finalProtein,
         carbsG: finalCarbs,
@@ -74,31 +85,9 @@ export async function POST(request: NextRequest) {
       },
     });
     
-    // Calculate today's totals
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
-    
-    const todayLogs = await prisma.foodLog.findMany({
-      where: {
-        userId: user.id,
-        ts: {
-          gte: todayStart,
-          lte: todayEnd,
-        },
-      },
-    });
-    
-    const totals = todayLogs.reduce(
-      (acc, log) => ({
-        calories: acc.calories + (log.calories || 0),
-        proteinG: acc.proteinG + (log.proteinG || 0),
-        carbsG: acc.carbsG + (log.carbsG || 0),
-        fatG: acc.fatG + (log.fatG || 0),
-      }),
-      { calories: 0, proteinG: 0, carbsG: 0, fatG: 0 }
-    );
+    // Calculate today's totals using shared utility (ensures consistency)
+    const { calculateTodayNutrition } = await import("@/lib/nutrition-calculations");
+    const totals = await calculateTodayNutrition(user.id);
     
     return NextResponse.json({
       id: foodLog.id,
