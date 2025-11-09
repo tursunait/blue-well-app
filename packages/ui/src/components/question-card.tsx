@@ -499,7 +499,12 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
         };
 
         const handleSkipField = () => {
-          handleNextField();
+          // If we're on the last field (weight, index 5), proceed to next question
+          if (currentFieldIndex === 5) {
+            onNext?.();
+          } else {
+            handleNextField();
+          }
         };
 
         const foodPrefsOptions = ["Vegetarian", "Vegan", "Halal", "Kosher", "Dairy-free", "Gluten-free", "None", "Other"];
@@ -842,14 +847,24 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
                     >
                       Back
                     </Button>
-                    <Button
-                      variant="ghost"
-                      onClick={handleSkipField}
-                      size="lg"
-                      className="flex-1 rounded-full border border-neutral-border"
-                    >
-                      Skip
-                    </Button>
+                    {compoundValue.weightKg && compoundValue.weightKg >= 1 ? (
+                      <Button
+                        onClick={onNext}
+                        size="lg"
+                        className="flex-1 rounded-full bg-gradient-to-r from-bluewell-light to-bluewell-royal text-white hover:from-bluewell-royal hover:to-bluewell-navy shadow-md hover:shadow-lg transition-all duration-200 border-0"
+                      >
+                        Continue
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        onClick={handleSkipField}
+                        size="lg"
+                        className="flex-1 rounded-full border border-neutral-border"
+                      >
+                        Skip
+                      </Button>
+                    )}
                   </div>
                 </div>
               );
@@ -1057,17 +1072,20 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
                 Back
               </Button>
             )}
-            <Button
-              onClick={onNext}
-              disabled={!question.optional && !isValid}
-              size="lg"
-              className={cn(
-                "flex-1 rounded-full bg-gradient-to-r from-bluewell-light to-bluewell-royal text-white hover:from-bluewell-royal hover:to-bluewell-navy shadow-md hover:shadow-lg transition-all duration-200 border-0",
-                !canGoBack && "w-full"
-              )}
-            >
-              {canGoBack ? "Next" : "Continue"}
-            </Button>
+            {/* Hide Continue button for compound questions when on last field (weight, index 5) */}
+            {!(question.type === "compound" && currentFieldIndex === 5) && (
+              <Button
+                onClick={onNext}
+                disabled={!question.optional && !isValid}
+                size="lg"
+                className={cn(
+                  "flex-1 rounded-full bg-gradient-to-r from-bluewell-light to-bluewell-royal text-white hover:from-bluewell-royal hover:to-bluewell-navy shadow-md hover:shadow-lg transition-all duration-200 border-0",
+                  !canGoBack && "w-full"
+                )}
+              >
+                {canGoBack ? "Next" : "Continue"}
+              </Button>
+            )}
           </div>
           {/* Skip for now - only show if question is optional */}
           {onSkip && question.optional && (

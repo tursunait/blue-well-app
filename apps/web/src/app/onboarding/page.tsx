@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { QuestionCard, CircularProgress, Card, CardContent, Button } from "@halo/ui";
 import { SurveyQuestion } from "@halo/types";
 
@@ -304,6 +305,17 @@ export default function OnboardingPage() {
       <div className="min-h-screen bg-neutral-bg flex flex-col items-center justify-center p-6">
         <Card className="w-full max-w-2xl border-0 shadow-soft">
           <CardContent className="p-8 space-y-6 text-center">
+            {/* Logo */}
+            <div className="flex justify-center">
+              <Image
+                src="/img/logo_headline.png"
+                alt="BlueWell"
+                width={200}
+                height={67}
+                className="object-contain"
+                priority
+              />
+            </div>
             <h1 className="text-3xl font-semibold text-neutral-dark">You're all set.</h1>
             <p className="text-base text-neutral-text leading-relaxed">
               We'll tailor simple steps that fit your schedule.
@@ -343,8 +355,20 @@ export default function OnboardingPage() {
   return (
     <div className="min-h-screen bg-neutral-bg flex flex-col items-center justify-center p-6 pb-24">
       <div className="w-full max-w-lg space-y-6">
+        {/* Logo */}
+        <div className="flex justify-center pt-4">
+          <Image
+            src="/img/logo_icon.png"
+            alt="BlueWell"
+            width={48}
+            height={48}
+            className="object-contain"
+            priority
+          />
+        </div>
+        
         {/* Circular Progress Indicator */}
-        <div className="pt-6">
+        <div className="pt-2">
           <CircularProgress current={progress} total={total} />
         </div>
 

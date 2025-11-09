@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import Image from "next/image";
 import { FitnessGoalCard, AutoDetectedMeal } from "@halo/ui";
 import { Camera, PenSquare } from "lucide-react";
 import { estimateCalories, estimateCaloriesFromText, type CalorieEstimateResponse } from "@/lib/api";
@@ -177,9 +178,19 @@ export default function LogPage() {
           multiple={false}
         />
 
-        {/* Header */}
+        {/* Header with Logo */}
         <div className="pt-8">
-          <h1 className="text-3xl font-semibold text-neutral-dark">Log Meal</h1>
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <Image
+              src="/img/logo_icon.png"
+              alt="BlueWell"
+              width={40}
+              height={40}
+              className="object-contain"
+              priority
+            />
+            <h1 className="text-3xl font-semibold text-neutral-dark">Log Meal</h1>
+          </div>
         </div>
 
         {/* Fitness Goals Section */}

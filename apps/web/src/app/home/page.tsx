@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import {
   DailyGoalProgress,
   MyRecClassCard,
@@ -47,9 +48,19 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-neutral-bg pb-24">
       <div className="mx-auto max-w-2xl space-y-6 p-6">
-        {/* Header */}
-        <div className="pt-8 text-center">
-          <h1 className="text-3xl font-semibold text-neutral-dark">Your Day, Optimized</h1>
+        {/* Header with Logo */}
+        <div className="pt-8 space-y-4">
+          <div className="flex items-center justify-center gap-3">
+            <Image
+              src="/img/logo_icon.png"
+              alt="BlueWell"
+              width={40}
+              height={40}
+              className="object-contain"
+              priority
+            />
+            <h1 className="text-3xl font-semibold text-neutral-dark">Your Day, Optimized</h1>
+          </div>
         </div>
 
         {/* Daily Progress Goals - 3 circular indicators */}

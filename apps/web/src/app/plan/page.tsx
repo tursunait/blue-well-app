@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { Card, CardContent, Button } from "@halo/ui";
 
 interface TodayPlan {
@@ -122,10 +123,20 @@ export default function PlanPage() {
   return (
     <div className="min-h-screen bg-neutral-bg pb-24">
       <div className="mx-auto max-w-2xl space-y-6 p-6">
-        {/* Header */}
+        {/* Header with Logo */}
         <div className="pt-8 space-y-2">
-          <h1 className="text-3xl font-semibold text-neutral-dark">Your Plan</h1>
-          <p className="text-base text-neutral-text">
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <Image
+              src="/img/logo_icon.png"
+              alt="BlueWell"
+              width={40}
+              height={40}
+              className="object-contain"
+              priority
+            />
+            <h1 className="text-3xl font-semibold text-neutral-dark">Your Plan</h1>
+          </div>
+          <p className="text-base text-neutral-text text-center">
             Personalized wellness plan based on your goals
           </p>
         </div>
