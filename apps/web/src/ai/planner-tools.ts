@@ -1,36 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getQueryEmbedding, cosineSimilarity } from "./embeddings";
-
-// Mifflin-St Jeor BMR calculation
-function calculateBMR(weightKg: number, heightCm: number, age: number, gender: string): number {
-  const base = 10 * weightKg + 6.25 * heightCm - 5 * age;
-  return gender === "Man" ? base + 5 : base - 161;
-}
-
-// Calculate TDEE from BMR and activity level
-function calculateTDEE(bmr: number, weeklyActivity: number): number {
-  // weeklyActivity: 1=Rarely, 2=1-2 days, 3=3-4 days, 4=5+ days
-  const activityFactors = [1.2, 1.375, 1.55, 1.725]; // sedentary, light, moderate, active
-  const factor = activityFactors[weeklyActivity - 1] || 1.2;
-  return bmr * factor;
-}
-
-// Adjust TDEE by fitness goal
-function adjustByGoal(tdee: number, goal: string | null): number {
-  if (!goal) return tdee;
-  
-  switch (goal) {
-    case "LOSE_FAT":
-      return tdee - 250;
-    case "GAIN_MUSCLE":
-    case "FITNESS":
-    case "ATHLETIC":
-      return tdee + 200;
-    case "MAINTAIN":
-    default:
-      return tdee;
-  }
-}
+import { calculateDailyTargets } from "@/lib/targets";
 
 export async function getUserContext(userId: string) {
   const user = await prisma.user.findUnique({
@@ -41,31 +11,14 @@ export async function getUserContext(userId: string) {
     throw new Error("User not found");
   }
   
-  // Calculate calorie budget from user data
-  let calorieBudget = 2000; // default
-  let proteinTarget = 120; // default
-  
-  if (user.weightKg && user.heightCm && user.age && user.gender) {
-    const bmr = calculateBMR(
-      user.weightKg,
-      user.heightCm,
-      user.age,
-      user.gender
-    );
-    const tdee = calculateTDEE(bmr, user.weeklyActivity || 2);
-    calorieBudget = Math.round(adjustByGoal(tdee, user.fitnessGoal));
-    
-    // Protein target: 1.2 g/kg (configurable)
-    const proteinPerKg = parseFloat(process.env.DEFAULT_PROTEIN_PER_KG || "1.2");
-    proteinTarget = Math.round(user.weightKg * proteinPerKg);
-  }
+  const targets = calculateDailyTargets(user);
   
   // Parse JSON strings to arrays for SQLite compatibility
   const { parseJsonArray } = await import("@/lib/sqlite-utils");
   
   return {
-    calorieBudget,
-    proteinTarget,
+    calorieBudget: targets.kcal,
+    proteinTarget: targets.protein_g,
     dietPrefs: parseJsonArray<string>(user.dietPrefs),
     avoidFoods: parseJsonArray<string>(user.avoidFoods),
     timeBudgetMin: user.timeBudgetMin || 20,
@@ -86,8 +39,21 @@ export async function searchMenuItems(options: {
   dietPrefs?: string[];
   proteinMin?: number;
   priceMax?: number;
+  mealType?: "Breakfast" | "Lunch" | "Dinner";
 }) {
+  // Use database as primary source (MenuItem and MenuVendor tables)
+  console.log(`[searchMenuItems] Searching database for menu items with options:`, options);
+  
   const where: any = {};
+  
+  // Filter by vendor source - prioritize Duke Dining items
+  const vendors = await prisma.menuVendor.findMany({
+    where: { source: "DUKE_DINING" },
+  });
+  
+  if (vendors.length > 0) {
+    where.vendorId = { in: vendors.map(v => v.id) };
+  }
   
   if (options.priceMax) {
     where.priceUSD = { lte: options.priceMax };
@@ -100,20 +66,42 @@ export async function searchMenuItems(options: {
   let items = await prisma.menuItem.findMany({
     where,
     include: { vendor: true },
-    take: 20,
+    take: 50, // Get more items for filtering
   });
+  
+  console.log(`[searchMenuItems] Found ${items.length} items from database`);
   
   // Filter by diet preferences
   // Parse tags from JSON string (SQLite compatibility)
   const { parseJsonArray } = await import("@/lib/sqlite-utils");
   
   if (options.dietPrefs && options.dietPrefs.length > 0) {
+    const beforeFilter = items.length;
     items = items.filter((item) => {
       const itemTags = parseJsonArray<string>(item.tags);
       return options.dietPrefs!.some((pref) =>
         itemTags.some((tag) => tag.toLowerCase().includes(pref.toLowerCase()))
       );
     });
+    console.log(`[searchMenuItems] After diet filter: ${beforeFilter} → ${items.length}`);
+  }
+  
+  // Filter by meal type if specified (check item name/description for meal type keywords)
+  if (options.mealType) {
+    const mealTypeKeywords: Record<string, string[]> = {
+      Breakfast: ["breakfast", "morning", "egg", "pancake", "waffle", "cereal", "oatmeal", "bagel", "croissant"],
+      Lunch: ["lunch", "sandwich", "wrap", "salad", "burger", "soup"],
+      Dinner: ["dinner", "entrée", "entree", "pasta", "chicken", "beef", "fish", "steak", "curry"],
+    };
+    
+    const keywords = mealTypeKeywords[options.mealType] || [];
+    const beforeFilter = items.length;
+    items = items.filter((item) => {
+      const nameLower = item.name.toLowerCase();
+      const descLower = (item.description || "").toLowerCase();
+      return keywords.some((keyword) => nameLower.includes(keyword) || descLower.includes(keyword));
+    });
+    console.log(`[searchMenuItems] After meal type filter (${options.mealType}): ${beforeFilter} → ${items.length}`);
   }
   
   // Rank by semantic similarity if query provided
@@ -138,7 +126,7 @@ export async function searchMenuItems(options: {
     }
   }
   
-  return items.slice(0, 10).map((item) => ({
+  const results = items.slice(0, 20).map((item) => ({
     id: item.id,
     name: item.name,
     vendor: item.vendor.name,
@@ -149,6 +137,9 @@ export async function searchMenuItems(options: {
     priceUSD: item.priceUSD,
     tags: parseJsonArray<string>(item.tags),
   }));
+  
+  console.log(`[searchMenuItems] Returning ${results.length} items from database`);
+  return results;
 }
 
 export async function listRecClasses(options: {

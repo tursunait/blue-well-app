@@ -39,6 +39,7 @@ model User {
   activityLogs    ActivityLog[]
   recommendations Recommendation[]
   mealLogs        MealLog[] // legacy
+  aiRecs          AIRec[]
 }
 
 // Enums are stored as strings in SQLite
@@ -151,12 +152,15 @@ model FoodLog {
   ts        DateTime @default(now())
   source    String   // "PHOTO_AI" | "MANUAL" | "MENU_PICK"
   itemName  String
+  restaurant String? // Restaurant/vendor name (e.g., "Marketplace", "Bella Union")
+  menuItemId String? // Optional: link to MenuItem if from database
   calories  Int
   proteinG  Float?
   carbsG    Float?
   fatG      Float?
   notes     String?
   @@index([userId, ts])
+  @@index([restaurant, itemName])
 }
 
 model ActivityLog {
@@ -195,5 +199,20 @@ model ClassSlot {
   rawJson   String?   // JSON stored as string
   createdAt DateTime @default(now())
   @@index([start])
+}
+
+model AIRec {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  day       DateTime
+  kind      String   // "plan", etc.
+  payload   String   // JSON stored as string
+  model     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, day, kind])
+  @@index([userId, day])
 }
 

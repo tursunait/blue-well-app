@@ -1,18 +1,98 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import Image from "next/image";
 import { FitnessGoalCard, AutoDetectedMeal } from "@halo/ui";
 import { Camera, PenSquare } from "lucide-react";
 import { estimateCalories, estimateCaloriesFromText, type CalorieEstimateResponse } from "@/lib/api";
 import { useNutrition } from "@/contexts/nutrition-context";
 
+interface Stats {
+  calories: { consumed: number; goal: number; remaining: number; burned: number };
+  protein: { consumed: number; goal: number; remaining: number };
+  steps: { current: number; goal: number; remaining: number };
+}
+
+interface FoodLog {
+  id: string;
+  itemName: string;
+  calories: number;
+  proteinG: number | null;
+  carbsG: number | null;
+  fatG: number | null;
+  restaurant: string | null;
+  ts: string;
+  source: string;
+}
+
 // BlueWell Log Meal - Fitness Goals + Auto-Detected Meal
 export default function LogPage() {
   // Get nutrition data from context
-  const { caloriesConsumed, caloriesGoal, proteinConsumed, proteinGoal, loggedMeals, addMeal } = useNutrition();
+  const { loggedMeals, addMeal } = useNutrition();
+  
+  // Fetch stats from API for consistency
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
 
-  const stepsCurrent = 8500;
-  const stepsGoal = 10000;
+  useEffect(() => {
+    loadStats();
+    loadFoodLogs();
+    // Refresh stats every 30 seconds
+    const interval = setInterval(() => {
+      loadStats();
+      loadFoodLogs();
+    }, 30000);
+
+    // Also refresh when page becomes visible
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        loadStats();
+        loadFoodLogs();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
+  const loadStats = async () => {
+    try {
+      const response = await fetch("/api/stats/today");
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data);
+      }
+    } catch (err) {
+      console.error("Error loading stats:", err);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+  const loadFoodLogs = async () => {
+    try {
+      const response = await fetch("/api/log/meal");
+      if (response.ok) {
+        const data = await response.json();
+        setFoodLogs(data);
+      }
+    } catch (err) {
+      console.error("Error loading food logs:", err);
+    }
+  };
+
+  // Use API stats if available, fallback to context
+  const caloriesConsumed = stats?.calories.consumed ?? 0;
+  const caloriesGoal = stats?.calories.goal ?? 1800;
+  const proteinConsumed = stats?.protein.consumed ?? 0;
+  const proteinGoal = stats?.protein.goal ?? 120;
+  const stepsCurrent = stats?.steps.current ?? 0;
+  const stepsGoal = stats?.steps.goal ?? 10000;
 
   // File input ref
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -42,22 +122,113 @@ export default function LogPage() {
   // Calculated values for display
   const caloriesRemaining = caloriesGoal - caloriesConsumed; // Still calculate for summary
 
-  const handleConfirm = () => {
-    if (detectedMeal) {
-      console.log("Meal confirmed:", detectedMeal);
-
-      // Add meal using context
-      addMeal({
-        name: detectedMeal.name,
-        calories: detectedMeal.calories,
-        protein: detectedMeal.protein,
-        carbs: detectedMeal.carbs,
-        fat: detectedMeal.fat,
-      });
-
-      // Clear the detected meal
-      setDetectedMeal(null);
+  const handleConfirm = async () => {
+    console.log("[handleConfirm] Called, detectedMeal:", detectedMeal);
+    
+    if (!detectedMeal) {
+      console.error("[handleConfirm] No detected meal to confirm!");
+      alert("No meal detected. Please take a photo or enter a meal manually.");
+      return;
     }
+    
+    console.log("[handleConfirm] Meal confirmed:", detectedMeal);
+
+    try {
+      setIsLoading(true);
+        
+        // Save meal to database via API
+        console.log("[handleConfirm] Sending request with data:", {
+          itemName: detectedMeal.name,
+          calories: detectedMeal.calories,
+          proteinG: detectedMeal.protein,
+          carbsG: detectedMeal.carbs,
+          fatG: detectedMeal.fat,
+        });
+        
+        const response = await fetch("/api/log/meal", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            itemName: detectedMeal.name,
+            calories: detectedMeal.calories,
+            proteinG: detectedMeal.protein,
+            carbsG: detectedMeal.carbs,
+            fatG: detectedMeal.fat,
+            source: "PHOTO",
+          }),
+        }).catch((fetchError) => {
+          console.error("[handleConfirm] Fetch error (network/connection):", fetchError);
+          throw new Error(`Network error: ${fetchError.message}`);
+        });
+
+        console.log("[handleConfirm] Response status:", response.status, response.statusText);
+
+        if (!response.ok) {
+          let errorData: any = {};
+          const contentType = response.headers.get("content-type");
+          
+          if (contentType && contentType.includes("application/json")) {
+            try {
+              errorData = await response.json();
+            } catch (e) {
+              console.error("[handleConfirm] Failed to parse error JSON:", e);
+            }
+          } else {
+            const text = await response.text().catch(() => "");
+            console.error("[handleConfirm] Non-JSON error response:", text);
+            errorData = { error: text || `HTTP ${response.status}: ${response.statusText}` };
+          }
+          
+          const errorMessage = errorData.error || errorData.details || errorData.message || `Server error: ${response.status}`;
+          console.error("[handleConfirm] API error details:", {
+            status: response.status,
+            statusText: response.statusText,
+            errorData,
+            errorMessage,
+          });
+          throw new Error(errorMessage);
+        }
+
+        const data = await response.json();
+        console.log("[handleConfirm] Meal logged successfully:", data);
+
+        // Also add to context for immediate UI update
+        addMeal({
+          name: detectedMeal.name,
+          calories: detectedMeal.calories,
+          protein: detectedMeal.protein,
+          carbs: detectedMeal.carbs,
+          fat: detectedMeal.fat,
+        });
+
+        // Clear the detected meal
+        setDetectedMeal(null);
+
+        // Refresh stats and food logs immediately to reflect the new totals
+        // Small delay to ensure database write is complete
+        setTimeout(() => {
+          loadStats();
+          loadFoodLogs();
+        }, 100);
+      } catch (error) {
+        console.error("[handleConfirm] Error logging meal:", error);
+        let errorMessage = "Failed to log meal. Please try again.";
+        
+        if (error instanceof TypeError && error.message.includes("fetch")) {
+          errorMessage = "Network error: Unable to connect to server. Please check if the server is running.";
+        } else if (error instanceof Error) {
+          errorMessage = error.message;
+        } else if (typeof error === "string") {
+          errorMessage = error;
+        }
+        
+        console.error("[handleConfirm] Final error message:", errorMessage);
+        alert(`Failed to log meal: ${errorMessage}`);
+      } finally {
+        setIsLoading(false);
+      }
   };
 
   const handleEdit = () => {
@@ -177,9 +348,19 @@ export default function LogPage() {
           multiple={false}
         />
 
-        {/* Header */}
+        {/* Header with Logo */}
         <div className="pt-8">
-          <h1 className="text-3xl font-semibold text-neutral-dark">Log Meal</h1>
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <Image
+              src="/img/logo_icon.png"
+              alt="BlueWell"
+              width={40}
+              height={40}
+              className="object-contain"
+              priority
+            />
+            <h1 className="text-3xl font-semibold text-neutral-dark">Log Meal</h1>
+          </div>
         </div>
 
         {/* Fitness Goals Section */}
@@ -196,7 +377,7 @@ export default function LogPage() {
               type="steps"
               current={stepsCurrent}
               goal={stepsGoal}
-              title="Lose Weight"
+              title="Steps goal"
               subtitle="Steps:"
             />
             <FitnessGoalCard
@@ -420,11 +601,11 @@ export default function LogPage() {
         )}
 
         {/* Logged Meals History */}
-        {loggedMeals.length > 0 && (
+        {foodLogs.length > 0 && (
           <div className="space-y-4 mt-8">
             <h2 className="text-lg font-semibold text-neutral-dark">Today&apos;s Meals</h2>
             <div className="space-y-3">
-              {loggedMeals.map((meal) => (
+              {foodLogs.map((meal) => (
                 <div
                   key={meal.id}
                   className="bg-white rounded-xl p-4 shadow-soft border border-neutral-border"
@@ -432,14 +613,22 @@ export default function LogPage() {
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <h3 className="font-semibold text-neutral-dark">
-                        {meal.name}
+                        {meal.itemName}
                       </h3>
+                      {meal.restaurant && (
+                        <p className="text-xs text-neutral-muted">
+                          {meal.restaurant}
+                        </p>
+                      )}
                       <p className="text-sm text-neutral-text mt-1">
-                        {meal.calories} calories • {meal.protein}g protein • {meal.carbs}g carbs • {meal.fat}g fat
+                        {meal.calories} calories
+                        {meal.proteinG && ` • ${Math.round(meal.proteinG)}g protein`}
+                        {meal.carbsG && ` • ${Math.round(meal.carbsG)}g carbs`}
+                        {meal.fatG && ` • ${Math.round(meal.fatG)}g fat`}
                       </p>
                     </div>
                     <div className="text-xs text-neutral-muted">
-                      {meal.timestamp.toLocaleTimeString([], {
+                      {new Date(meal.ts).toLocaleTimeString([], {
                         hour: '2-digit',
                         minute: '2-digit'
                       })}

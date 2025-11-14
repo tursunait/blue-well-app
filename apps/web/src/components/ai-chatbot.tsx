@@ -17,18 +17,27 @@ export function AIChatbot({ userProfile }: AIChatbotProps) {
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Fetch user profile if not provided
-  const { data: profile } = useQuery({
-    queryKey: ["userProfile"],
+  // Fetch chat persona with survey context
+  const { data: personaData } = useQuery({
+    queryKey: ["chatPersona"],
     queryFn: async () => {
-      const response = await fetch("/api/profile");
+      const response = await fetch("/api/chat/profile");
       if (!response.ok) return null;
       return response.json();
     },
     enabled: !userProfile,
   });
 
-  const activeProfile = userProfile || profile;
+  const activePersona = userProfile || personaData?.persona;
+  const personaContext = activePersona
+    ? {
+        targets: {
+          calorieBudget: activePersona.calorieBudget,
+          proteinTarget: activePersona.proteinTarget,
+        },
+        surveyAnswers: personaData?.surveyAnswers || [],
+      }
+    : undefined;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -47,7 +56,7 @@ export function AIChatbot({ userProfile }: AIChatbotProps) {
           content: msg.content,
         }));
 
-      return chatRequest(message, undefined, conversationHistory, activeProfile || undefined);
+      return chatRequest(message, personaContext, conversationHistory, activePersona || undefined);
     },
     onSuccess: (data, message) => {
       const userMessage: ChatMessage = {
@@ -209,4 +218,3 @@ export function AIChatbot({ userProfile }: AIChatbotProps) {
     </div>
   );
 }
-

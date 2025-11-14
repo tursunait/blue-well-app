@@ -4,24 +4,39 @@ import { authOptions } from "../../auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import OpenAI from "openai";
 import { getQueryEmbedding, cosineSimilarity } from "@/ai/embeddings";
+import { withRetry } from "@/lib/ai";
+import { getUserId, getDevUser } from "@/lib/auth-dev";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
 export async function POST(request: NextRequest) {
+  try {
   const session = await getServerSession(authOptions);
-  
-  if (!session?.user?.email) {
+    let userId: string | null = null;
+    
+    userId = await getUserId(session);
+    
+    if (!userId) {
+      // In dev mode, try to get/create a dev user
+      try {
+        userId = await getDevUser();
+      } catch (error) {
+        console.warn("[log/photo] Failed to get dev user:", error);
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+    }
+    
+    if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   
-  try {
     const body = await request.json();
     const { image, imageUrl } = body; // base64 image or URL
     
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { id: userId },
     });
     
     if (!user) {
@@ -34,7 +49,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing image" }, { status: 400 });
     }
     
-    const visionResponse = await openai.chat.completions.create({
+    // Use retry wrapper for OpenAI Vision API calls
+    const visionResponse = await withRetry(
+      () =>
+        openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
@@ -54,7 +72,10 @@ export async function POST(request: NextRequest) {
         },
       ],
       response_format: { type: "json_object" },
-    });
+          max_tokens: 500,
+        }),
+      { retries: 2, baseMs: 500 }
+    );
     
     const analysis = JSON.parse(visionResponse.choices[0].message.content || "{}");
     const {
@@ -73,9 +94,10 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Try to match with menu items using semantic similarity
+    // Try to match with menu items using semantic similarity (fuzzy matching with strict threshold)
     let matchedItemId: string | null = null;
     let matchedItem: any = null;
+    let finalRestaurant: string | undefined = undefined;
     
     try {
       const queryEmbedding = await getQueryEmbedding(name);
@@ -83,6 +105,7 @@ export async function POST(request: NextRequest) {
         where: {
           embedding: { not: null },
         },
+        include: { vendor: true }, // Include vendor for restaurant name
         take: 50,
       });
       
@@ -99,33 +122,38 @@ export async function POST(request: NextRequest) {
         }
       }
       
-      // If similarity is high enough (>0.7), use DB nutrition
+      // Strict threshold: only use DB nutrition if similarity > 0.7 (high confidence)
+      // Below threshold, fall back to manual confirmation (no hallucinations)
       if (bestMatch && bestMatch.similarity > 0.7) {
         matchedItem = bestMatch.item;
         matchedItemId = matchedItem.id;
+        finalRestaurant = matchedItem.vendor.name; // EXACT restaurant name from database
       }
     } catch (error) {
       console.error("Error matching with menu items:", error);
     }
     
-    // Use DB nutrition if matched, otherwise use AI estimates
+    // Use DB nutrition if matched with high confidence, otherwise use AI estimates
+    // If similarity < 0.7, return AI estimate and let user confirm (no auto-mapping)
     const finalCalories = matchedItem?.calories || calories;
     const finalProtein = matchedItem?.proteinG || proteinG;
     const finalCarbs = matchedItem?.carbsG || carbsG;
     const finalFat = matchedItem?.fatG || fatG;
     const finalName = matchedItem?.name || name;
     
-    // Create food log
+    // Create food log with restaurant if matched
     const foodLog = await prisma.foodLog.create({
       data: {
         userId: user.id,
         itemName: finalName,
+        restaurant: finalRestaurant || null, // EXACT restaurant name if matched
+        menuItemId: matchedItemId || null, // Link to MenuItem if matched
         calories: finalCalories,
         proteinG: finalProtein,
         carbsG: finalCarbs,
         fatG: finalFat,
-        notes: estimate ? "AI estimate" : null,
-        source: "PHOTO_AI",
+        notes: !matchedItem && estimate ? "AI estimate - please confirm" : null,
+        source: matchedItem ? "MENU_PICK" : "PHOTO_AI",
         ts: new Date(),
       },
     });
@@ -133,18 +161,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       id: foodLog.id,
       name: finalName,
+      restaurant: finalRestaurant, // EXACT restaurant name if matched
+      menuItemId: matchedItemId, // MenuItem ID if matched
       calories: finalCalories,
       proteinG: finalProtein,
       carbsG: finalCarbs,
       fatG: finalFat,
       matched: !!matchedItem,
       estimate: !matchedItem && estimate,
+      requiresConfirmation: !matchedItem, // If not matched, requires user confirmation
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error processing photo:", error);
+    const is429 = error?.status === 429 || error?.code === "insufficient_quota";
+    const errorMessage = is429
+      ? "OpenAI quota exceeded. Please try again later."
+      : error instanceof Error
+      ? error.message
+      : "Failed to process photo";
+    
     return NextResponse.json(
-      { error: "Failed to process photo", details: error instanceof Error ? error.message : String(error) },
-      { status: 500 }
+      { error: "Failed to process photo", details: errorMessage },
+      { status: is429 ? 429 : 500 }
     );
   }
 }

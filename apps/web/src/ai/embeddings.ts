@@ -2,9 +2,17 @@ import OpenAI from "openai";
 import { prisma } from "@/lib/prisma";
 import pRetry from "p-retry";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+let cachedClient: OpenAI | null = null;
+
+function getOpenAIClient() {
+  if (cachedClient) return cachedClient;
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY is not configured. Embedding calls require a valid key.");
+  }
+  cachedClient = new OpenAI({ apiKey });
+  return cachedClient;
+}
 
 const EMBEDDINGS_MODEL = process.env.PLANNER_EMBEDDINGS_MODEL || "text-embedding-3-small";
 const BATCH_SIZE = 100; // OpenAI allows up to 2048 items per batch, but we'll use smaller batches
@@ -44,7 +52,17 @@ export async function embedMenuItems(itemIds?: string[]): Promise<number> {
     const texts = batch.map((item) => {
       const parts = [item.name];
       if (item.description) parts.push(item.description);
-      if (item.tags && item.tags.length > 0) parts.push(item.tags.join(", "));
+      // Parse tags from JSON string (SQLite stores as string)
+      if (item.tags) {
+        try {
+          const tags = typeof item.tags === 'string' ? JSON.parse(item.tags) : item.tags;
+          if (Array.isArray(tags) && tags.length > 0) {
+            parts.push(tags.join(", "));
+          }
+        } catch (e) {
+          // If parsing fails, skip tags
+        }
+      }
       return parts.join(". ");
     });
 
@@ -52,7 +70,7 @@ export async function embedMenuItems(itemIds?: string[]): Promise<number> {
       // Get embeddings with retry
       const response = await pRetry(
         async () => {
-          return await openai.embeddings.create({
+          return await getOpenAIClient().embeddings.create({
             model: EMBEDDINGS_MODEL,
             input: texts,
           });
@@ -91,7 +109,7 @@ export async function embedMenuItems(itemIds?: string[]): Promise<number> {
  * Get embedding for a search query
  */
 export async function getQueryEmbedding(query: string): Promise<Float32Array> {
-  const response = await openai.embeddings.create({
+  const response = await getOpenAIClient().embeddings.create({
     model: EMBEDDINGS_MODEL,
     input: query,
   });
@@ -115,4 +133,3 @@ export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
 
   return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
 }
-
