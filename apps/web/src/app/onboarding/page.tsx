@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { QuestionCard, CircularProgress, Card, CardContent, Button } from "@halo/ui";
 import { SurveyQuestion } from "@halo/types";
 
@@ -117,6 +118,7 @@ export default function OnboardingPage() {
   const [error, setError] = useState<string | null>(null);
   const [isComplete, setIsComplete] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   // Ensure component is mounted before rendering
   useEffect(() => {
@@ -278,6 +280,53 @@ export default function OnboardingPage() {
     }
   };
 
+  const handleReset = async () => {
+    if (!confirm("Are you sure you want to restart the survey? All your progress will be lost.")) {
+      return;
+    }
+
+    setIsResetting(true);
+    setError(null);
+
+    try {
+      // Clear localStorage
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("bluewell-onboarding");
+      }
+
+      // Reset database data via API
+      const response = await fetch("/api/survey/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (!response.ok) {
+        console.warn("API reset failed, but continuing with local reset");
+      }
+
+      // Reset local state
+      setAnswers({});
+      setCurrentIndex(0);
+      setUnits({ heightUnit: "cm", weightUnit: "kg" });
+      setIsComplete(false);
+
+      // Small delay to show reset happened
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    } catch (err) {
+      console.error("Error resetting survey:", err);
+      // Still reset local state even if API fails
+      setAnswers({});
+      setCurrentIndex(0);
+      setUnits({ heightUnit: "cm", weightUnit: "kg" });
+      setIsComplete(false);
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("bluewell-onboarding");
+      }
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   const handleChange = (value: any) => {
     setAnswers({ ...answers, [currentQuestion.id]: value });
     setError(null);
@@ -304,6 +353,17 @@ export default function OnboardingPage() {
       <div className="min-h-screen bg-neutral-bg flex flex-col items-center justify-center p-6">
         <Card className="w-full max-w-2xl border-0 shadow-soft">
           <CardContent className="p-8 space-y-6 text-center">
+            {/* Logo */}
+            <div className="flex justify-center">
+              <Image
+                src="/img/logo_headline.png"
+                alt="BlueWell"
+                width={200}
+                height={67}
+                className="object-contain"
+                priority
+              />
+            </div>
             <h1 className="text-3xl font-semibold text-neutral-dark">You're all set.</h1>
             <p className="text-base text-neutral-text leading-relaxed">
               We'll tailor simple steps that fit your schedule.
@@ -343,8 +403,36 @@ export default function OnboardingPage() {
   return (
     <div className="min-h-screen bg-neutral-bg flex flex-col items-center justify-center p-6 pb-24">
       <div className="w-full max-w-lg space-y-6">
+        {/* Logo and Reset Button */}
+        <div className="flex justify-between items-center pt-4">
+          <div className="flex-1"></div>
+          <div className="flex-1 flex justify-center">
+          <Image
+            src="/img/logo_icon.png"
+            alt="BlueWell"
+            width={48}
+            height={48}
+            className="object-contain"
+            priority
+          />
+          </div>
+          <div className="flex-1 flex justify-end">
+            {validIndex > 0 && (
+              <Button
+                onClick={handleReset}
+                disabled={isResetting}
+                variant="ghost"
+                size="sm"
+                className="text-xs text-neutral-text hover:text-neutral-dark"
+              >
+                {isResetting ? "Resetting..." : "Restart"}
+              </Button>
+            )}
+          </div>
+        </div>
+        
         {/* Circular Progress Indicator */}
-        <div className="pt-6">
+        <div className="pt-2">
           <CircularProgress current={progress} total={total} />
         </div>
 

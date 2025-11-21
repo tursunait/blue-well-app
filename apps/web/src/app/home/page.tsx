@@ -1,130 +1,374 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import {
-  DailyGoalProgress,
   MyRecClassCard,
-  MealPlanCard,
-  MealDeliveryCard,
   Timeline,
   TimelineEvent,
+  Card,
+  CardContent,
+  Button,
+  FitnessGoalCard,
+  MealPlanCard,
+  MealDeliveryCard,
 } from "@halo/ui";
-import { AIChatbot } from "@/components/ai-chatbot";
-import { useNutrition } from "@/contexts/nutrition-context";
+import { WellnessDisclaimer } from "@/components/WellnessDisclaimer";
+import { getRandomMealDeliveryLink, type MealDeliveryLink, MEAL_DELIVERY_LINKS } from "@/data/meal-delivery-links";
 
-// BlueWell Home - Your Day, Optimized
+interface PlanResponse {
+  day: string;
+  targets: {
+    kcal: number;
+    protein_g: number;
+  };
+  meals: Array<{
+    id: string;
+    item: string;
+    restaurant: string;
+    calories: number | null;
+    protein_g: number | null;
+    time?: string;
+    portion_note?: string;
+  }>;
+  workouts: Array<{
+    id: string;
+    title: string;
+    location?: string | null;
+    start_time?: string;
+    end_time?: string;
+    intensity?: string;
+    note?: string;
+  }>;
+}
+
+interface StatsResponse {
+  calories: { consumed: number; goal: number; remaining: number; burned: number };
+  protein: { consumed: number; goal: number; remaining: number };
+  steps: { current: number; goal: number; remaining: number };
+}
+
+const todayISODate = () => new Date().toISOString().split("T")[0];
+
 export default function HomePage() {
-  // Get nutrition data from context
-  const { caloriesConsumed, caloriesGoal, proteinConsumed, proteinGoal } = useNutrition();
+  const [plan, setPlan] = useState<PlanResponse | null>(null);
+  const [stats, setStats] = useState<StatsResponse | null>(null);
+  const [planLoading, setPlanLoading] = useState(true);
+  const [planError, setPlanError] = useState<string | null>(null);
+  const [myRecClass, setMyRecClass] = useState<{
+    title: string;
+    time: string;
+    startTime?: string;
+    endTime?: string;
+    location?: string;
+  } | null>(null);
+  const [classLoading, setClassLoading] = useState(true);
+  
+  // Meal delivery state
+  const [selectedMeal, setSelectedMeal] = useState<string | null>(null);
+  const [currentDeliveryLink, setCurrentDeliveryLink] = useState<MealDeliveryLink | null>(null);
+  const [excludedUrls, setExcludedUrls] = useState<string[]>([]);
+  
+  // Get meal options from the data file
+  const mealOptions = Object.keys(MEAL_DELIVERY_LINKS);
 
-  const stepsCurrent = 8000;
-  const stepsGoal = 10000;
+  useEffect(() => {
+    loadPlan(false);
+    loadStats();
+    loadNearestClass();
 
-  // MyRec class recommendation
-  const [myRecClass, setMyRecClass] = useState({
-    title: "Full Body Strength",
-    time: "5:30 PM",
-  });
+    const interval = setInterval(() => {
+      loadPlan(false);
+      loadStats();
+      loadNearestClass();
+    }, 30000);
 
-  // Meal plan options
-  const mealOptions = ["Mediterranean Bowl", "Grilled Chicken Salad", "Quinoa Power Bowl"];
-  const [selectedMeal, setSelectedMeal] = useState<string | undefined>();
+    // Also refresh when page becomes visible (e.g., navigating back from log page)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        loadStats();
+        loadPlan(false);
+      }
+    };
 
-  // Meal delivery recommendation
-  const [mealDelivery, setMealDelivery] = useState({
-    restaurant: "Yoprea",
-    meal: "Mediterranean Bowl",
-    service: "Grubhub" as "Grubhub" | "Uber Eats" | "DoorDash",
-  });
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
-  // Timeline events for next 6 hours
-  const timelineEvents: TimelineEvent[] = [
-    { id: "1", label: "Workout", time: "6:00 PM", color: "green" },
-    { id: "2", label: "Meal", time: "7:30 PM", color: "blue" },
-    { id: "3", label: "Yoga Class", time: "8:15 PM", color: "purple" },
-  ];
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
+  const loadPlan = async (refresh: boolean) => {
+    try {
+      setPlanError(null);
+      setPlanLoading(true);
+      const response = await fetch("/api/plan/generate", {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          day: todayISODate(),
+          refresh,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        const message = data.error || data.details || "Unable to load plan.";
+        throw new Error(message);
+      }
+
+      const data = (await response.json()) as PlanResponse;
+      setPlan(data);
+    } catch (error) {
+      console.error("[home/page] Error loading plan:", error);
+      setPlanError(
+        error instanceof Error ? error.message : "Unable to load plan right now."
+      );
+    } finally {
+      setPlanLoading(false);
+    }
+  };
+
+  const loadStats = async () => {
+    try {
+      const response = await fetch("/api/stats/today", { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error("Failed to load stats");
+      }
+      const data = (await response.json()) as StatsResponse;
+      setStats(data);
+    } catch (error) {
+      console.error("[home/page] Error loading stats:", error);
+    }
+  };
+
+  const isLoading = planLoading && !plan;
+
+  const loadNearestClass = async () => {
+    try {
+      const response = await fetch("/api/rec/nearest-class", { cache: "no-store" });
+      if (response.ok) {
+        const data = await response.json();
+        setMyRecClass(data.class ?? null);
+      }
+    } catch (error) {
+      console.error("[home/page] Error loading nearest class:", error);
+    } finally {
+      setClassLoading(false);
+    }
+  };
+
+  const formatTime = (isoString?: string) => {
+    if (!isoString) return "";
+    try {
+      const date = new Date(isoString);
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        console.warn(`[formatTime] Invalid date string: ${isoString}`);
+        return "";
+      }
+      return date.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+    } catch (error) {
+      console.warn(`[formatTime] Error parsing date: ${isoString}`, error);
+      return "";
+    }
+  };
+
+  // Handle meal selection
+  const handleMealSelect = (meal: string) => {
+    setSelectedMeal(meal);
+    // Reset excluded URLs when selecting a new meal
+    setExcludedUrls([]);
+    // Get a random delivery link for the selected meal
+    const link = getRandomMealDeliveryLink(meal, []);
+    setCurrentDeliveryLink(link);
+  };
+
+  // Handle skip delivery link
+  const handleSkipDelivery = () => {
+    if (!selectedMeal) return;
+    
+    // Add current URL to excluded list and get a new link
+    if (currentDeliveryLink) {
+      const updatedExcluded = [...excludedUrls, currentDeliveryLink.url];
+      setExcludedUrls(updatedExcluded);
+      
+      // Get a new random link (excluding all previous ones)
+      const newLink = getRandomMealDeliveryLink(selectedMeal, updatedExcluded);
+      setCurrentDeliveryLink(newLink);
+    }
+  };
+
+  // Handle accept delivery link
+  const handleAcceptDelivery = () => {
+    if (currentDeliveryLink?.url) {
+      window.open(currentDeliveryLink.url, "_blank", "noopener,noreferrer");
+    }
+  };
+
+  // Handle skip meal selection
+  const handleSkipMeal = () => {
+    setSelectedMeal(null);
+    setCurrentDeliveryLink(null);
+    setExcludedUrls([]);
+  };
+
+  const timelineEvents: TimelineEvent[] = useMemo(() => {
+    if (!plan) return [];
+    return plan.workouts
+      .filter((workout) => Boolean(workout.start_time))
+      .slice(0, 3)
+      .map((workout, index) => ({
+        id: workout.id,
+        label: workout.title,
+        time: workout.start_time ? formatTime(workout.start_time) : "",
+        color: ["blue", "green", "purple"][index % 3],
+      }));
+  }, [plan]);
 
   return (
     <div className="min-h-screen bg-neutral-bg pb-24">
       <div className="mx-auto max-w-2xl space-y-6 p-6">
-        {/* Header */}
-        <div className="pt-8 text-center">
-          <h1 className="text-3xl font-semibold text-neutral-dark">Your Day, Optimized</h1>
+        <div className="pt-8 space-y-4">
+          <div className="flex items-center justify-center gap-3">
+            <Image
+              src="/img/logo_icon.png"
+              alt="BlueWell"
+              width={40}
+              height={40}
+              className="object-contain"
+              priority
+            />
+            <h1 className="text-3xl font-semibold text-neutral-dark">Your Day, Optimized</h1>
+          </div>
         </div>
 
-        {/* Daily Progress Goals - 3 circular indicators */}
-        <div className="grid grid-cols-3 gap-4">
-          <DailyGoalProgress
-            label="Calories"
-            current={caloriesConsumed}
-            goal={caloriesGoal}
-            color="blue"
-            showRemaining={false}
-          />
-          <DailyGoalProgress
-            label="Steps"
-            current={stepsCurrent}
-            goal={stepsGoal}
-            color="green"
-          />
-          <DailyGoalProgress
-            label="Protein"
-            current={proteinConsumed}
-            goal={proteinGoal}
-            color="purple"
-          />
-        </div>
+        <WellnessDisclaimer />
 
-        {/* AI Recommendations Section */}
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-neutral-dark">AI Recommendations</h2>
+          <h2 className="text-lg font-semibold text-neutral-dark">Fitness Goals</h2>
+          <div className="grid grid-cols-3 gap-3">
+            <FitnessGoalCard
+              type="calories"
+              current={stats?.calories.consumed ?? 0}
+              goal={stats?.calories.goal ?? 0}
+              title="Calories Consumed"
+            />
+            <FitnessGoalCard
+              type="steps"
+              current={stats?.steps.current ?? 0}
+              goal={stats?.steps.goal ?? 0}
+              title="Steps goal"
+              subtitle="Today"
+            />
+            <FitnessGoalCard
+              type="protein"
+              current={stats?.protein.consumed ?? 0}
+              goal={stats?.protein.goal ?? 0}
+              title="Protein"
+            />
+          </div>
+        </div>
 
-          {/* AI Chatbot */}
-          <AIChatbot />
+        <Card className="border-0 shadow-soft">
+          <CardContent className="p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-neutral-dark">Today's Meals</h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => loadPlan(true)}
+                disabled={planLoading}
+              >
+                Refresh
+              </Button>
+            </div>
 
-          {/* MyRec Class Recommendation */}
+            {planError && (
+              <div className="text-sm text-red-600">{planError}</div>
+            )}
+
+            {planLoading ? (
+              <div className="text-sm text-neutral-muted">Loading plan...</div>
+            ) : plan && plan.meals.length > 0 ? (
+              <div className="space-y-3">
+                {plan.meals.map((meal) => (
+                  <div
+                    key={meal.id}
+                    className="p-4 rounded-xl border border-neutral-border bg-neutral-white"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-neutral-dark">
+                        {meal.item}
+                      </span>
+                      {meal.time && (
+                        <span className="text-xs text-neutral-muted">{formatTime(meal.time)}</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-neutral-muted mt-1">{meal.restaurant}</div>
+                    <div className="text-xs text-neutral-muted mt-1">
+                      {meal.calories ?? "—"} kcal
+                      {meal.protein_g !== null && typeof meal.protein_g !== "undefined"
+                        ? ` • ${meal.protein_g}g protein`
+                        : ""}
+                    </div>
+                    {meal.portion_note && (
+                      <div className="text-xs text-neutral-muted mt-2">{meal.portion_note}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-neutral-muted">No meals planned yet.</div>
+            )}
+          </CardContent>
+        </Card>
+
+        {!classLoading && myRecClass && (
           <MyRecClassCard
             classTitle={myRecClass.title}
             time={myRecClass.time}
             onAccept={() => {
-              console.log("Accepted MyRec class");
-              // Add logic to register for class
+              console.log("Accepted MyRec class:", myRecClass);
             }}
             onSkip={() => {
-              console.log("Skipped MyRec class");
+              setMyRecClass(null);
             }}
           />
+        )}
 
-          {/* Meal Plan Recommendation with Dropdown */}
+        {/* Meal Delivery Section */}
+        {mealOptions.length > 0 && (
+          <div className="space-y-4">
+            {!selectedMeal ? (
           <MealPlanCard
             mealOptions={mealOptions}
-            selectedMeal={selectedMeal}
-            onSelectMeal={(meal) => {
-              setSelectedMeal(meal);
-              console.log("Selected meal:", meal);
-            }}
-            onSkip={() => {
-              console.log("Skipped meal plan");
-            }}
+                selectedMeal={selectedMeal || undefined}
+                onSelectMeal={handleMealSelect}
+                onSkip={handleSkipMeal}
           />
+            ) : currentDeliveryLink ? (
+            <MealDeliveryCard
+              restaurantName={currentDeliveryLink.restaurantName}
+              mealName={currentDeliveryLink.dishName}
+              deliveryService={currentDeliveryLink.service}
+                url={currentDeliveryLink.url}
+                onAccept={handleAcceptDelivery}
+                onSkip={handleSkipDelivery}
+            />
+            ) : null}
+          </div>
+          )}
 
-          {/* Meal Delivery Recommendation */}
-          <MealDeliveryCard
-            restaurantName={mealDelivery.restaurant}
-            mealName={mealDelivery.meal}
-            deliveryService={mealDelivery.service}
-            onAccept={() => {
-              console.log("Accepted meal delivery");
-              // Add logic to open delivery app
-            }}
-            onSkip={() => {
-              console.log("Skipped meal delivery");
-            }}
-          />
-        </div>
-
-        {/* Timeline - Next 6 hours */}
-        <Timeline events={timelineEvents} />
+        {timelineEvents.length > 0 && <Timeline events={timelineEvents} />}
       </div>
     </div>
   );

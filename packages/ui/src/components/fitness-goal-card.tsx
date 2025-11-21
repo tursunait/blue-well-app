@@ -74,14 +74,14 @@ export const FitnessGoalCard: React.FC<FitnessGoalCardProps> = ({
               />
             </div>
             <div className={cn("text-base font-bold", textColorClasses[type])}>
-              {current.toLocaleString()}/{goal.toLocaleString()}m
+              {current.toLocaleString()}/{goal.toLocaleString()}
             </div>
           </div>
         )}
 
         {isSteps && (
           <div className={cn("text-base font-bold", textColorClasses[type])}>
-            {current.toLocaleString()}/{goal.toLocaleString()}m
+            {current.toLocaleString()}/{goal.toLocaleString()}
           </div>
         )}
 

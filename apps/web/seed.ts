@@ -5,34 +5,23 @@ const prisma = new PrismaClient();
 async function main() {
   console.log("Seeding database...");
 
-  // Create a test user
+  // Create a test user (using direct User fields, not Profile relation)
   const user = await prisma.user.upsert({
     where: { email: "test@halo.com" },
     update: {},
     create: {
       email: "test@halo.com",
       name: "Test User",
-      profile: {
-        create: {
           age: 30,
           gender: "Other",
           heightCm: 175,
           weightKg: 70,
-          units: "metric",
-          primaryGoal: "General fitness",
-          weeklyWorkouts: 3,
-          dietPrefs: ["Vegetarian"],
-          allergies: [],
-          budgetWeekly: 100,
-          timePrefs: ["morning", "evening"],
-        },
-      },
-      integrations: {
-        create: {
-          gcalConnected: false,
-          myrecConnected: false,
-        },
-      },
+      fitnessGoal: "FITNESS",
+      weeklyActivity: 3,
+      dietPrefs: JSON.stringify(["Vegetarian"]),
+      avoidFoods: null,
+      googleCalConnected: false,
+      myRecConnected: false,
     },
   });
 

@@ -379,6 +379,8 @@ DEFAULT_PROTEIN_PER_KG=1.2
 NEXT_PUBLIC_FASTAPI_BASE_URL=http://localhost:8000
 ```
 
+> The FastAPI service also reads `OPENAI_API_KEY` from your environment. Export it in any terminal where you run `pnpm dev:api` (e.g., `export OPENAI_API_KEY=sk-proj-...`) so the chatbot can call the LLM.
+
 **Generate NEXTAUTH_SECRET:**
 ```bash
 openssl rand -base64 32

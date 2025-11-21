@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
-import { getUserContext } from "@/ai/planner-tools";
 import { getUserId, getDevUser } from "@/lib/auth-dev";
+import { calculateDailyTargets } from "@/lib/targets";
+import { parseJsonArray } from "@/lib/sqlite-utils";
 
 export async function GET(request: NextRequest) {
   // Get user ID - works in both dev and prod mode
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest) {
     }
     
     // Get user context for targets
-    const context = await getUserContext(user.id);
+    const targets = calculateDailyTargets(user);
     
     // Calculate today's boundaries
     const todayStart = new Date();
@@ -41,60 +42,36 @@ export async function GET(request: NextRequest) {
     const todayEnd = new Date();
     todayEnd.setHours(23, 59, 59, 999);
     
-    // Get today's food logs
-    const foodLogs = await prisma.foodLog.findMany({
-      where: {
-        userId: user.id,
-        ts: {
-          gte: todayStart,
-          lte: todayEnd,
-        },
-      },
-    });
+    // Use shared calculation utilities for consistency
+    const {
+      calculateTodayNutrition,
+      calculateTodayCaloriesBurned,
+      calculateTodaySteps,
+    } = await import("@/lib/nutrition-calculations");
     
-    // Get today's activity logs (for steps and calories burned)
-    const activityLogs = await prisma.activityLog.findMany({
-      where: {
-        userId: user.id,
-        ts: {
-          gte: todayStart,
-          lte: todayEnd,
-        },
-      },
-    });
-    
-    // Calculate totals
-    const caloriesConsumed = foodLogs.reduce((sum, log) => sum + (log.calories || 0), 0);
-    const proteinConsumed = foodLogs.reduce((sum, log) => sum + (log.proteinG || 0), 0);
-    const caloriesBurned = activityLogs.reduce((sum, log) => sum + (log.kcalBurn || 0), 0);
-    
-    // Calculate steps (from activity logs - walking/running activities)
-    const steps = activityLogs.reduce((sum, log) => {
-      const activityLower = log.activity.toLowerCase();
-      if (activityLower.includes("walk") || activityLower.includes("run")) {
-        // Rough estimate: 1 minute of walking = ~100 steps, running = ~150 steps
-        const stepsPerMin = activityLower.includes("run") ? 150 : 100;
-        return sum + (log.durationMin || 0) * stepsPerMin;
-      }
-      return sum;
-    }, 0);
+    // Calculate totals using shared utilities (single source of truth)
+    const nutrition = await calculateTodayNutrition(user.id);
+    const caloriesConsumed = nutrition.calories;
+    const proteinConsumed = nutrition.proteinG;
+    const caloriesBurned = await calculateTodayCaloriesBurned(user.id);
+    const steps = await calculateTodaySteps(user.id);
     
     const stepGoal = parseInt(process.env.DEFAULT_STEP_GOAL || "10000");
     
     // Calculate remaining
-    const caloriesRemaining = Math.max(0, context.calorieBudget - caloriesConsumed + caloriesBurned);
-    const proteinRemaining = Math.max(0, context.proteinTarget - proteinConsumed);
+    const caloriesRemaining = Math.max(0, targets.kcal - caloriesConsumed + caloriesBurned);
+    const proteinRemaining = Math.max(0, targets.protein_g - proteinConsumed);
     
-    return NextResponse.json({
+    const stats = {
       calories: {
         consumed: caloriesConsumed,
-        goal: context.calorieBudget,
+        goal: targets.kcal,
         remaining: caloriesRemaining,
         burned: caloriesBurned,
       },
       protein: {
         consumed: proteinConsumed,
-        goal: context.proteinTarget,
+        goal: targets.protein_g,
         remaining: proteinRemaining,
       },
       steps: {
@@ -102,6 +79,39 @@ export async function GET(request: NextRequest) {
         goal: stepGoal,
         remaining: Math.max(0, stepGoal - steps),
       },
+    };
+
+    // Generate AI-powered insights (non-blocking - don't fail if AI is unavailable)
+    let insights: Record<string, unknown> = {};
+    let aiInsightsFallback = false;
+    
+    try {
+      const { generateStatsInsights } = await import("@/ai/stats-insights-ai");
+      const dietPrefs = parseJsonArray<string>(user.dietPrefs);
+      const insightsResult = await generateStatsInsights(user.id, {
+        ...stats,
+        dietPrefs,
+      });
+      insights = insightsResult;
+      aiInsightsFallback = insightsResult.aiInsightsFallback ?? false;
+    } catch (error: any) {
+      const is429 = error?.status === 429 || error?.code === "insufficient_quota";
+      console.warn("[stats/today] AI insights failed:", is429 ? "quota/429" : error?.message || error);
+      
+      // Return fallback insights
+      insights = {
+        summary: "AI insights are temporarily unavailable.",
+        recommendations: [],
+        encouragement: "Keep tracking your progress!",
+        aiInsightsFallback: true,
+      };
+      aiInsightsFallback = true;
+    }
+    
+    return NextResponse.json({
+      ...stats,
+      insights,
+      aiInsightsFallback, // Flag for UI to show degraded state if needed
     });
   } catch (error) {
     console.error("Error fetching today's stats:", error);

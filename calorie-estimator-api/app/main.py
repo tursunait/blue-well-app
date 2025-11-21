@@ -1,417 +1,283 @@
 """
-FastAPI Calorie Estimator Service
-
-Main application file that exposes the /v1/estimate-calories endpoint
-for analyzing food images and returning calorie estimates.
+Calorie Estimator API
+FastAPI server for estimating calories from food images
 """
-
-from pathlib import Path
-
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.templating import Jinja2Templates
-from fastapi.concurrency import run_in_threadpool
-from typing import List, Optional
-from pydantic import BaseModel, Field
-import logging
+from pydantic import BaseModel
+from typing import List, Optional, Dict, Any
+import os
 from dotenv import load_dotenv
+import openai
+from openai import OpenAI
+import base64
+import io
+from PIL import Image
 
-from app.openai_client import get_client
-from app.log_manager import log_estimation, get_recent_estimations
-
-# Load environment variables from .env file
+# Load environment variables
 load_dotenv()
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
-
-# Initialize FastAPI app
 app = FastAPI(
     title="Calorie Estimator API",
-    description="AI-powered calorie estimation from food images using OpenAI Vision API",
-    version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc"
+    description="API for estimating calories and nutrition from food images",
+    version="1.0.0"
 )
 
-# Configure CORS for frontend integration
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://localhost:3002"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+# Initialize OpenAI client
+openai_api_key = os.getenv("OPENAI_API_KEY")
+if not openai_api_key:
+    raise ValueError("OPENAI_API_KEY not found in environment variables")
 
-# Response models for API documentation
-class DimensionsModel(BaseModel):
-    """Physical dimensions of the food item in centimeters"""
-    length: float = Field(..., description="Length in cm")
-    width: float = Field(..., description="Width in cm")
-    height: float = Field(..., description="Height in cm")
+client = OpenAI(api_key=openai_api_key)
+model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
 
-class NutritionModel(BaseModel):
-    """Nutritional information for a food item"""
-    calories: int = Field(..., description="Total calories (kcal)")
-    protein_g: float = Field(..., description="Protein in grams")
-    carbohydrates_g: float = Field(..., description="Total carbohydrates in grams")
-    fat_g: float = Field(..., description="Total fat in grams")
-    fiber_g: float = Field(..., description="Dietary fiber in grams")
-    sugar_g: float = Field(..., description="Sugar in grams")
-    sodium_mg: float = Field(..., description="Sodium in milligrams")
+# Response models
+class NutritionInfo(BaseModel):
+    calories: float
+    protein_g: float
+    carbohydrates_g: float
+    fat_g: float
+    fiber_g: Optional[float] = 0.0
+    sugar_g: Optional[float] = 0.0
+    sodium_mg: Optional[float] = 0.0
 
 
 class CalorieEstimateItem(BaseModel):
-    """Single food item calorie estimation result"""
-    dish_name: str = Field(..., description="Name of the dish")
-    estimated_dimensions_cm: DimensionsModel = Field(..., description="Estimated dimensions")
-    estimated_calories: int = Field(..., description="Estimated calories (deprecated, use nutrition.calories)")
-    nutrition: NutritionModel = Field(..., description="Detailed nutritional information")
-    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score (0-1)")
-    rationale: str = Field(..., max_length=500, description="Reasoning for the estimate")
-    error: Optional[str] = Field(None, description="Error message if processing failed")
+    dish_name: str
+    estimated_calories: float
+    nutrition: NutritionInfo
+    confidence: float
+    rationale: str
 
 
 class CalorieEstimateResponse(BaseModel):
-    """Complete API response with all food items and metadata"""
-    items: List[CalorieEstimateItem] = Field(..., description="List of analyzed food items")
-    total_calories: int = Field(..., description="Sum of all estimated calories")
-    model_used: str = Field(..., description="OpenAI model used for analysis")
-    images_processed: int = Field(..., description="Number of images processed")
+    items: List[CalorieEstimateItem]
+    total_calories: float
+    model_used: str
+    images_processed: int
 
 
-@app.get("/web/calorie-estimator", response_class=HTMLResponse)
-async def render_calorie_estimator(request: Request):
-    """
-    Serve the interactive calorie estimator web page.
-    """
-    return templates.TemplateResponse(
-        "calorie_estimator.html",
-        {"request": request}
-    )
+async def analyze_image_with_openai(image_bytes: bytes, hint: Optional[str] = None) -> Dict[str, Any]:
+    """Analyze food image using OpenAI Vision API"""
+    try:
+        # Convert image to base64
+        image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+        image_data_url = f"data:image/jpeg;base64,{image_base64}"
+        
+        # Build prompt
+        prompt = """Analyze this food image and estimate the nutrition information.
+Return a JSON object with this exact structure:
+{
+  "name": "dish name",
+  "calories": number,
+  "proteinG": number,
+  "carbsG": number,
+  "fatG": number,
+  "confidence": number between 0 and 1,
+  "rationale": "brief explanation"
+}
+
+Be as accurate as possible. If uncertain, provide reasonable estimates."""
+        
+        if hint:
+            prompt += f"\n\nHint: {hint}"
+        
+        # Call OpenAI Vision API
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": image_data_url
+                            }
+                        }
+                    ]
+                }
+            ],
+            max_tokens=500,
+            response_format={"type": "json_object"}
+        )
+        
+        content = response.choices[0].message.content
+        if not content:
+            raise ValueError("No response from OpenAI")
+        
+        # Parse JSON response
+        import json
+        result = json.loads(content)
+        
+        # Normalize field names
+        return {
+            "dish_name": result.get("name", "Unknown dish"),
+            "estimated_calories": float(result.get("calories", 0)),
+            "nutrition": {
+                "calories": float(result.get("calories", 0)),
+                "protein_g": float(result.get("proteinG", 0)),
+                "carbohydrates_g": float(result.get("carbsG", 0)),
+                "fat_g": float(result.get("fatG", 0)),
+                "fiber_g": float(result.get("fiberG", 0)),
+                "sugar_g": float(result.get("sugarG", 0)),
+                "sodium_mg": float(result.get("sodiumMg", 0))
+            },
+            "confidence": float(result.get("confidence", 0.7)),
+            "rationale": result.get("rationale", "AI estimate")
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error analyzing image: {str(e)}")
 
 
 @app.get("/")
 async def root():
-    """
-    Root endpoint - API health check and information.
-
-    Returns:
-        Basic API information
-    """
-    return {
-        "service": "Calorie Estimator API",
-        "version": "1.0.0",
-        "status": "running",
-        "endpoints": {
-            "estimate": "/v1/estimate-calories",
-            "docs": "/docs",
-            "health": "/health"
-        }
-    }
+    return {"message": "Calorie Estimator API", "version": "1.0.0"}
 
 
 @app.get("/health")
-async def health_check():
-    """
-    Health check endpoint for monitoring and load balancers.
-
-    Returns:
-        Health status of the service
-    """
-    try:
-        # Verify OpenAI client can be initialized
-        get_client()
-        return {
-            "status": "healthy",
-            "service": "calorie-estimator",
-            "openai_client": "initialized"
-        }
-    except Exception as e:
-        logger.error(f"Health check failed: {str(e)}")
-        return JSONResponse(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={
-                "status": "unhealthy",
-                "error": str(e)
-            }
-        )
+async def health():
+    return {"status": "ok"}
 
 
-@app.post(
-    "/v1/estimate-calories",
-    response_model=CalorieEstimateResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Estimate calories from food images",
-    description="Upload one or more food images to get AI-powered calorie estimates"
-)
+@app.post("/v1/estimate-calories", response_model=CalorieEstimateResponse)
 async def estimate_calories(
-    images: List[UploadFile] = File(
-        ...,
-        description="One or more food images (JPEG/PNG)"
-    ),
-    hint: Optional[str] = Form(
-        None,
-        description="Optional hint about the food (e.g., 'vegetarian', 'dessert')"
-    ),
-    plate_diameter_cm: Optional[float] = Form(
-        None,
-        description="Optional plate diameter in cm for scale reference",
-        ge=10.0,
-        le=50.0
-    )
+    images: List[UploadFile] = File(...),
+    hint: Optional[str] = Form(None),
+    plate_diameter_cm: Optional[float] = Form(None)
 ):
     """
-    Main endpoint for calorie estimation from food images.
-
-    This endpoint:
-    1. Accepts one or more image uploads (JPEG/PNG format)
-    2. Optionally accepts contextual hints and plate diameter
-    3. Sends images to OpenAI Vision API for analysis
-    4. Returns structured calorie estimates with confidence scores
-
+    Estimate calories and nutrition from food images
+    
     Args:
-        images: List of uploaded image files
-        hint: Optional context hint about the food
-        plate_diameter_cm: Optional plate diameter for scale reference
-
+        images: List of image files
+        hint: Optional hint about the food (e.g., "chicken salad")
+        plate_diameter_cm: Optional plate diameter for size estimation
+    
     Returns:
-        CalorieEstimateResponse with detailed estimates for each image
-
-    Raises:
-        HTTPException: 400 for invalid input, 502 for API errors, 500 for server errors
+        CalorieEstimateResponse with estimated nutrition information
     """
-    logger.info(
-        f"Received request: {len(images)} image(s), "
-        f"hint='{hint}', plate_diameter={plate_diameter_cm}"
-    )
-
-    # Validate input
-    if not images:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="At least one image is required"
-        )
-
-    # Validate file types
-    allowed_types = {"image/jpeg", "image/jpg", "image/png"}
-    for idx, image in enumerate(images):
-        if image.content_type not in allowed_types:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Image {idx + 1} has invalid type '{image.content_type}'. "
-                       f"Allowed types: {allowed_types}"
-            )
-
     try:
-        # Get OpenAI client instance
-        client = get_client()
-
-        # Process all uploaded images
-        image_data = []
-        for image in images:
-            # Read image bytes
-            content = await image.read()
-
-            # Determine image format from content type
-            image_format = "jpeg" if "jpeg" in image.content_type or "jpg" in image.content_type else "png"
-
-            image_data.append((content, image_format))
-
-        logger.info(f"Processing {len(image_data)} image(s) through OpenAI API")
-
-        # Call OpenAI API for batch processing
-        results = await client.estimate_calories_batch(
-            images=image_data,
-            hint=hint,
-            plate_diameter_cm=plate_diameter_cm
+        if not images:
+            raise HTTPException(status_code=400, detail="No images provided")
+        
+        # Process first image (for now, we'll process one at a time)
+        image_file = images[0]
+        image_bytes = await image_file.read()
+        
+        # Analyze image
+        result = await analyze_image_with_openai(image_bytes, hint)
+        
+        # Build response
+        response = CalorieEstimateResponse(
+            items=[
+                CalorieEstimateItem(
+                    dish_name=result["dish_name"],
+                    estimated_calories=result["estimated_calories"],
+                    nutrition=NutritionInfo(**result["nutrition"]),
+                    confidence=result["confidence"],
+                    rationale=result["rationale"]
+                )
+            ],
+            total_calories=result["estimated_calories"],
+            model_used=model,
+            images_processed=1
         )
-
-        # Calculate total calories across all items
-        total_calories = sum(
-            item.get("estimated_calories", 0)
-            for item in results
-            if "error" not in item or item.get("estimated_calories", 0) > 0
-        )
-
-        # Prepare response
-        response = {
-            "items": results,
-            "total_calories": total_calories,
-            "model_used": client.model_name,
-            "images_processed": len(images)
-        }
-
-        logger.info(
-            f"Successfully processed {len(images)} image(s). "
-            f"Total calories: {total_calories}"
-        )
-
-        log_entry = {
-            "total_calories": total_calories,
-            "items": results,
-            "model_used": client.model_name,
-            "images_processed": len(images),
-            "hint": hint,
-            "plate_diameter_cm": plate_diameter_cm,
-        }
-        await run_in_threadpool(log_estimation, log_entry)
-
+        
         return response
-
-    except ValueError as e:
-        # Handle invalid JSON or malformed response from OpenAI
-        logger.error(f"Invalid response from model: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Invalid response from model: {str(e)}"
-        )
-
+    except HTTPException:
+        raise
     except Exception as e:
-        # Handle all other errors
-        logger.error(f"Error processing request: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Internal server error: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error estimating calories: {str(e)}")
 
 
-@app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
-    """
-    Global exception handler for unhandled errors.
-
-    Args:
-        request: The request that caused the error
-        exc: The exception that was raised
-
-    Returns:
-        JSON error response
-    """
-    logger.error(f"Unhandled exception: {str(exc)}", exc_info=True)
-    return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={
-            "detail": "An unexpected error occurred",
-            "error": str(exc)
-        }
-    )
-
-
-@app.get("/v1/estimation-history")
-async def estimation_history(limit: int = 10):
-    """
-    Retrieve recent calorie estimation logs.
-    """
-    entries = await run_in_threadpool(get_recent_estimations, limit)
-    return {
-        "items": entries,
-        "count": len(entries),
-        "limit": limit
-    }
-
-
-@app.post(
-    "/v1/estimate-calories-text",
-    response_model=CalorieEstimateResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Estimate calories from text description",
-    description="Provide a text description of food to get AI-powered calorie estimates"
-)
-async def estimate_calories_text(
-    food_description: str = Form(
-        ...,
-        description="Text description of food (e.g., '6 pieces of sushi', '2 donuts')"
-    )
+@app.post("/v1/estimate-calories-text", response_model=CalorieEstimateResponse)
+async def estimate_calories_from_text(
+    food_description: str = Form(...)
 ):
     """
-    Endpoint for calorie estimation from text description (no image required).
-
-    This endpoint:
-    1. Accepts a text description of food
-    2. Sends the description to OpenAI API for analysis
-    3. Returns structured calorie estimates with confidence scores
-
+    Estimate calories and nutrition from text description
+    
     Args:
-        food_description: Text description of the food
-
+        food_description: Text description of the food (e.g., "grilled chicken breast with rice")
+    
     Returns:
-        CalorieEstimateResponse with detailed estimates
-
-    Raises:
-        HTTPException: 400 for invalid input, 502 for API errors, 500 for server errors
+        CalorieEstimateResponse with estimated nutrition information
     """
-    logger.info(f"Received text-based request: '{food_description}'")
-
-    # Validate input
-    if not food_description or len(food_description.strip()) == 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Food description is required"
-        )
-
     try:
-        # Get OpenAI client instance
-        client = get_client()
+        if not food_description or not food_description.strip():
+            raise HTTPException(status_code=400, detail="Food description is required")
+        
+        # Use OpenAI to estimate from text
+        prompt = f"""Estimate the nutrition information for this food: "{food_description}".
 
-        # Call OpenAI API for text-based estimation
-        result = await client.estimate_calories_from_text(food_description)
+Return a JSON object with this exact structure:
+{{
+  "name": "dish name",
+  "calories": number,
+  "proteinG": number,
+  "carbsG": number,
+  "fatG": number,
+  "confidence": number between 0 and 1,
+  "rationale": "brief explanation"
+}}
 
-        # Prepare response
-        response = {
-            "items": [result],
-            "total_calories": result.get("estimated_calories", 0),
-            "model_used": client.model_name,
-            "images_processed": 0  # No images for text-based
-        }
-
-        logger.info(
-            f"Successfully processed text description. "
-            f"Total calories: {result.get('estimated_calories', 0)}"
+Be as accurate as possible. Provide reasonable estimates based on typical serving sizes."""
+        
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            max_tokens=500,
+            response_format={"type": "json_object"}
         )
-
-        log_entry = {
-            "total_calories": result.get("estimated_calories", 0),
-            "items": [result],
-            "model_used": client.model_name,
-            "images_processed": 0,
-            "food_description": food_description,
-        }
-        await run_in_threadpool(log_estimation, log_entry)
-
-        return response
-
-    except ValueError as e:
-        logger.error(f"Invalid response from model: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Invalid response from model: {str(e)}"
+        
+        content = response.choices[0].message.content
+        if not content:
+            raise ValueError("No response from OpenAI")
+        
+        import json
+        result = json.loads(content)
+        
+        # Build response
+        estimate_response = CalorieEstimateResponse(
+            items=[
+                CalorieEstimateItem(
+                    dish_name=result.get("name", food_description),
+                    estimated_calories=float(result.get("calories", 0)),
+                    nutrition=NutritionInfo(
+                        calories=float(result.get("calories", 0)),
+                        protein_g=float(result.get("proteinG", 0)),
+                        carbohydrates_g=float(result.get("carbsG", 0)),
+                        fat_g=float(result.get("fatG", 0))
+                    ),
+                    confidence=float(result.get("confidence", 0.7)),
+                    rationale=result.get("rationale", "AI estimate from text")
+                )
+            ],
+            total_calories=float(result.get("calories", 0)),
+            model_used=model,
+            images_processed=0
         )
-
+        
+        return estimate_response
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error processing request: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Internal server error: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error estimating calories from text: {str(e)}")
 
-
-if __name__ == "__main__":
-    import uvicorn
-
-    # Run the application with uvicorn
-    uvicorn.run(
-        "app.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
-    )
