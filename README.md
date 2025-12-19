@@ -1,118 +1,189 @@
-# BlueWell - AI-Powered Wellness Coach
+<!-- Welcome hero drawn from the app welcome page -->
+<p align="center">
+  <img src="apps/web/public/img/logo_headline.png" alt="BlueWell" width="360" />
+</p>
 
-BlueWell is an intelligent wellness coaching application that provides personalized meal plans, workout recommendations, and activity tracking. The app uses OpenAI's GPT-4o-mini with function calling to generate contextual recommendations based on user fitness goals, dietary preferences, and schedule.
+# BlueWell — AI-Assisted Wellness Application
 
-## 🏗️ Tech Stack
+BlueWell is a compact, production-oriented application built to explore how modern AI components behave when treated as part of a system rather than as isolated models.
+The project combines LLM-based planning, embeddings-driven retrieval, and image-based calorie estimation within a reproducible and deployed codebase.
 
-- **Frontend**: Next.js 14 (App Router), TypeScript, Tailwind CSS, shadcn/ui
-- **Backend**: Next.js API Routes + FastAPI (Python)
-- **Database**: PostgreSQL with Prisma ORM  
-- **AI**: OpenAI GPT-4o-mini (plan generation) + Embeddings (semantic search)
-- **Auth**: NextAuth.js with Google OAuth
-- **Build**: pnpm workspaces with Turborepo
+The emphasis is not on model novelty, but on orchestration, grounding, and practical accuracy—areas that often determine whether AI systems remain usable outside of controlled settings.
 
-## 📦 Project Structure
+## Why this project exists
+
+BlueWell was developed to study how AI can be integrated into a user-facing product under realistic constraints such as latency, cost, imperfect inputs, and operational deployment.
+
+Rather than optimizing for a single task, the project focuses on interactions between components: how an LLM plans actions, how retrieval influences those plans, and how inference services behave once deployed behind stable interfaces. The resulting system reflects tradeoffs commonly encountered in applied AI engineering work.
+
+You’re right — this isn’t a *content* problem anymore, it’s a **structure problem**.
+You have good material, but it’s repeating itself under different labels (“System overview”, “Core capabilities”, “Key Features”, “Tech Stack”), which makes the README feel longer and less confident than it is.
+
+Below is a **clean consolidation strategy** *and* a **rewritten unified version** of those sections that:
+
+* Removes overlap completely
+* Keeps an understated, senior tone
+* Lets architecture → capabilities → implementation flow naturally
+* Still surfaces everything a hiring manager cares about
+
+## Architecture & Design
+
+BlueWell is organized as a small set of cooperating components designed to reflect how AI systems are typically embedded into user-facing products.
+
+At a high level, the system consists of:
+
+* A **planner**, where an LLM produces structured actions rather than free-form responses
+* A **retrieval layer**, which grounds planner decisions using embeddings-based semantic search
+* A **deployed inference service**, responsible for estimating calories from text and images
+
+Each component is independently deployable and communicates through explicit interfaces. This separation allows the system to be inspected, monitored, and modified without coupling AI behavior directly to the UI.
+
+## Capabilities
+
+### Planning and recommendations
+
+An LLM is used as a planner to generate daily and weekly plans.
+Rather than producing direct answers, the model invokes explicit tools through function calling, keeping control over execution and data access outside the model.
+
+Planner behavior is constrained using prompt grounding and schema validation to reduce variability and encourage predictable outputs in both local and deployed environments.
+
+Representative planner tools include:
+
+* `search_menu` — semantic retrieval of meals aligned with dietary constraints
+* `list_rec_classes` — selection of relevant fitness classes
+* `compose_timeline` — scheduling activities into available time slots
+
+![Home](img/home.png)
+![Home](img/home2.png)
+![Plan](img/plan.png)
+
+### User context and goal modeling
+
+User context is collected through a short, multi-step onboarding flow covering fitness goals, dietary preferences, and schedule availability.
+
+Calorie targets are derived programmatically using standard metabolic calculations:
+
+* Basal Metabolic Rate (BMR)
+* Total Daily Energy Expenditure (TDEE)
+* Goal-adjusted budgets (e.g., modest caloric deficit or surplus)
+
+Daily summaries track calorie intake, protein consumption, and progress toward personalized goals.
+
+![Survey](img/survey.png)
+
+### Retrieval via embeddings
+
+Dining data is indexed using vector embeddings to support semantic search.
+Retrieval is filtered by dietary constraints and ranked using simple, interpretable heuristics rather than opaque scoring.
+
+This layer is intentionally designed to remain transparent and debuggable after deployment.
+
+### Calorie estimation from images and text
+
+Calorie estimation is handled by a **deployed FastAPI service** that accepts text descriptions, images, or both.
+
+To reduce portion-size error, the system uses **known box dimensions** as a physical reference. Food regions are compared against a standardized box size, allowing estimates to be normalized using real-world scale rather than visual appearance alone.
+
+This reflects a broader design choice throughout the project: compensating for model limitations through system-level constraints rather than increased model complexity.
+ 
+![Cal esimation](img/log1.png)
+
+### Meal logging and aggregation
+
+Meals are logged and aggregated per day to support summaries and future analysis.
+State is cached incrementally to keep data flows explicit and to reduce recomputation.
+
+![Logging](img/log.png)
+
+Perfect — these fit naturally, they just need to be placed **once**, in the right layer, without turning the README back into a feature dump.
+
+Below is the **clean addition**, integrated into the existing structure **without introducing overlap**.
+You only need to add **one subsection** under **Capabilities**.
+
+### AI assistant
+
+An AI assistant is provided as a conversational interface layered on top of the same planning and retrieval primitives.
+
+The assistant supports:
+
+* Clarifying or refining existing plans
+* Answering context-aware questions grounded in user data
+* Generating suggestions without bypassing system constraints
+
+Rather than acting as a separate chatbot, the assistant shares the same tools and grounding logic as the planner, ensuring consistent behavior across interaction modes.
+
+![Chatbot](img/chatbot.png)
+
+## Technology & Implementation
+
+* **Frontend**: Next.js 14 (App Router), TypeScript, Tailwind CSS, shadcn/ui
+* **Backend**: Next.js API routes and FastAPI (Python) for inference
+* **Database**: PostgreSQL with Prisma ORM
+* **AI**: OpenAI GPT-4o-mini (planning), OpenAI embeddings (retrieval)
+* **Authentication**: NextAuth.js with Google OAuth
+* **Tooling**: pnpm workspaces, Turborepo
+
+## Repository structure
 
 ```
 blue-well-app/
 ├── apps/
-│   ├── web/                    # Next.js full-stack application
-│   │   ├── src/app/            # App Router pages and API routes
-│   │   ├── src/ai/             # AI planning logic (OpenAI integration)
-│   │   ├── src/lib/            # Utilities (auth, API, database)
-│   │   └── prisma/             # Database schema & migrations
-│   └── api/                    # FastAPI service (Python)
+│   ├── web/                    # Next.js application (UI + API routes)
+│   │   ├── src/ai/             # Planner logic and tool orchestration
+│   │   ├── src/lib/            # Grounding, auth, database utilities
+│   │   └── prisma/             # Schema and migrations
+│   └── calorie-estimator-api/  # Deployed FastAPI inference service
+│
 ├── packages/
-│   ├── ui/                     # Shared React UI components
-│   └── types/                  # Shared TypeScript types
-└── infra/
-    └── docker-compose.yml      # PostgreSQL container
+│   ├── ui/                     # Shared UI primitives
+│   └── types/                  # Shared TypeScript contracts
+│
+└── scripts/
+    └── import-dining.sh        # ETL for menu ingestion and embeddings
 ```
 
-## 🎯 Key Features
+## Local reproduction
 
-### AI-Powered Plan Generation
-- **OpenAI GPT-4o-mini with Function Calling**: Generates personalized daily and weekly plans
-- **Context-Aware Recommendations**: Considers fitness goals, dietary preferences, schedule constraints
-- **Function Tools**: 
-  - `search_menu` - Semantic search for meals matching diet preferences
-  - `list_rec_classes` - Fitness class recommendations
-  - `compose_timeline` - Schedule items in user's free time slots
+The project can be reproduced locally with minimal setup. The instructions below mirror the deployed service boundaries and are intended for inspection and experimentation rather than production use.
 
-### Intelligent Features
-- **Multi-Step Onboarding Survey**: Collects personal info, fitness goals, schedule, dietary preferences
-- **Semantic Menu Search**: Uses embeddings to find relevant meals by meaning, not just keywords
-- **Calorie Goal Calculation**: BMR → TDEE → goal-adjusted budget (lose fat: -250 cal, gain muscle: +200 cal)
-- **Activity Tracking**: Log meals and workouts with automatic macro tracking
-- **Daily Progress Stats**: Monitor calories, protein, steps toward daily goals
+### Prerequisites
 
-### Data Integration
-- **Duke Dining Menu Import**: Imports nutrition data and generates embeddings
-- **Duke Rec Class Sync**: Syncs fitness classes from campus recreation
-- **Photo Analysis**: Estimates calories from meal photos (FastAPI backend)
+* Node.js 18+
+* `pnpm` (for workspace management)
+* Python 3.9+
+* An OpenAI API key (`OPENAI_API_KEY`) for AI functionality
 
-## 🔑 Core System Flows
+---
 
-### Daily Plan Generation
-1. User visits `/plan`
-2. API checks for cached plan or generates new one
-3. AI Planner retrieves user context (goals, calorie budget, today's consumption)
-4. Calls OpenAI with function tools to generate meals, workouts, tips
-5. Plan cached in database for the day
-6. Frontend renders with meal cards, class suggestions, wellness tips
+### 1. Install JavaScript dependencies
 
-### Meal Logging Flow
-- **Manual Entry**: User enters meal name, calories, and macros
-- **Menu Selection**: Pick from pre-loaded dining menu with embeddings
-- **Photo Upload**: FastAPI endpoint analyzes image for calorie estimation
-- All data aggregated for daily stats calculation
-
-### Semantic Search
-- Menu items indexed with OpenAI embeddings (`text-embedding-3-small`)
-- User queries converted to embeddings and ranked by:
-  1. Diet preference compliance (vegetarian, vegan, etc.)
-  2. Semantic similarity to query
-  3. Protein content alignment with fitness goals
-  4. Price considerations
-
-## 🏛️ Architecture Overview
-
-BlueWell is a full-stack monorepo that demonstrates an AI-driven wellness coach: personalized meal plans, activity suggestions, dining-menu semantic search, calorie/photo analysis, and a simple onboarding survey.
-
-
-**What the repo contains:**
-- **Frontend (`apps/web`)**: Next.js 14 (App Router) + TypeScript + Tailwind. UI, onboarding flow, plan pages, and API routes for auth and data.
-- **Backend (Next.js API + FastAPI)**: Next.js API routes with server endpoints; Python FastAPI services live in `apps/api` (chat/calendar) and `apps/calorie-estimator-api` (image/text calorie estimates).
-- **Shared packages**: `packages/ui` (component primitives), `packages/types` (shared TypeScript types).
-- **Data & ETL**: `scripts/import-dining.sh` and ETL code import campus dining menus into the app DB and generate embeddings.
-
-**Core features:**
-- AI plan generation using OpenAI (chat + function calling).
-- Semantic menu search via OpenAI embeddings.
-- Photo and text calorie estimation (FastAPI service in `apps/calorie-estimator-api`).
-- Onboarding survey and per-day cached plans.
-
-**Quick local reproduction (development)**
-
-Prerequisites:
-- Node.js (18+), `pnpm` (for workspace), and `python3` (3.9+ recommended).
-- An OpenAI API key for AI features (set `OPENAI_API_KEY`).
-
-1) Install JS dependencies (repo root):
+From the repository root:
 
 ```bash
 pnpm install
 ```
 
-2) Configure the web app environment:
+---
 
-- Copy or create `apps/web/.env.local` with at least:
-  - `DATABASE_URL=file:./prisma/prisma/dev.db` (local SQLite for demos)
-  - `SKIP_AUTH=true` (optional, enables demo auth bypass)
-  - `OPENAI_API_KEY=your_key_here`
-  - `NEXT_PUBLIC_FASTAPI_BASE_URL=http://localhost:8000` (or `http://localhost:8001` for the calorie estimator)
+### 2. Configure environment variables (web app)
 
-3) Initialize Prisma (from `apps/web`):
+Create `apps/web/.env.local` with at least the following values:
+
+```env
+DATABASE_URL=file:./prisma/prisma/dev.db
+SKIP_AUTH=true
+OPENAI_API_KEY=your_key_here
+NEXT_PUBLIC_FASTAPI_BASE_URL=http://localhost:8001
+```
+
+* SQLite is used for local development to keep setup lightweight
+* Authentication can be bypassed for demo purposes using `SKIP_AUTH=true`
+
+---
+
+### 3. Initialize the database (Prisma)
+
+From `apps/web`:
 
 ```bash
 cd apps/web
@@ -120,67 +191,100 @@ npx prisma db push
 npx prisma generate
 ```
 
-4) Start the Next.js web app (from repo root):
+This creates a local SQLite database at `apps/web/prisma/prisma/dev.db`.
+
+---
+
+### 4. Start the Next.js application
+
+From the repository root:
 
 ```bash
 pnpm --filter web dev
 ```
 
-5) Start the Python FastAPI services:
+---
 
-- Chat/calendar API (if present in `apps/api`):
+### 5. Start the FastAPI services
+
+#### a) General API service (if present in `apps/api`)
 
 ```bash
 cd apps/api
-python3 -m venv .venv && . .venv/bin/activate
+python3 -m venv .venv
+. .venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --app-dir apps/api --reload --port 8000
+uvicorn app.main:app --reload --port 8000
 ```
 
-- Calorie Estimator (in `apps/calorie-estimator-api`):
-
-```bash
-cd apps/calorie-estimator-api
-./setup.sh    # creates venv and installs requirements (or run manually)
-. venv/bin/activate
-uvicorn app.main:app --app-dir . --reload --port 8001
-```
-
-6) (Optional) Import Duke Dining menus for demo data:
-
-```bash
-# from repo root
-scripts/import-dining.sh
-```
-
-Notes: the script generates an `ADMIN_TOKEN` and posts to the running web dev server to import sample menu items and embeddings.
-
-**Prisma & DB**
-- The demo environment uses SQLite at `apps/web/prisma/prisma/dev.db` to keep local setup simple. If you want `Json` columns or production parity, switch to PostgreSQL and run migrations.
-
-**Calorie estimator**
-- The calorie estimator exposes:
-  - `GET /health` — health check
-  - `POST /v1/estimate-calories-text` — estimate from text (`form: food_description`)
-  - `POST /v1/estimate-calories` — multipart image upload
-- Ensure `OPENAI_API_KEY` and `OPENAI_MODEL` (optional) are set in `apps/calorie-estimator-api/.env`.
-
-**Developer tips & known quirks**
-- The app currently uses SQLite locally — Prisma `Json` type is not supported with SQLite; answers that need JSON are stored as strings. See `apps/web/src/app/api/survey/answer/route.ts` for serialization.
-- If ports conflict (8000/8001), kill the process or change the port when starting `uvicorn`.
-- To rebuild embeddings for imported menu items, re-run the import script with `rebuildEmbeddings=true`.
-
-**Useful commands**
-- Build monorepo: `pnpm build`
-- Start web only: `pnpm --filter web dev`
-- Prisma DB push & generate: `cd apps/web && npx prisma db push && npx prisma generate`
-- Start calorie estimator (example):
+#### b) Calorie estimator service
 
 ```bash
 cd apps/calorie-estimator-api
 ./setup.sh
-uvicorn app.main:app --app-dir . --reload --port 8001
+. venv/bin/activate
+uvicorn app.main:app --reload --port 8001
 ```
+
+The calorie estimator runs as an independent service and is consumed via HTTP by the web application.
+
 ---
 
-Maintained as a demo/portfolio repository — adapt production details (DB, secrets, and deployment) before going live.
+### 6. (Optional) Import demo dining data
+
+To populate the database with sample menu items and embeddings:
+
+```bash
+scripts/import-dining.sh
+```
+
+The script generates an admin token and posts data to the running web server.
+
+## Notes and implementation details
+
+### Database
+
+* Local development uses SQLite for simplicity
+* Prisma `Json` fields are serialized as strings due to SQLite limitations
+* For production parity, PostgreSQL can be substituted with minimal changes
+
+### Calorie estimator API
+
+The inference service exposes the following endpoints:
+
+* `GET /health` — health check
+* `POST /v1/estimate-calories-text` — calorie estimation from text
+* `POST /v1/estimate-calories` — calorie estimation from images (multipart upload)
+
+Environment variables for the service are read from `apps/calorie-estimator-api/.env`:
+
+* `OPENAI_API_KEY`
+* `OPENAI_MODEL` (optional)
+
+### Developer notes
+
+* If ports `8000` or `8001` are unavailable, adjust the port when starting `uvicorn`
+* Re-running the dining import script with `rebuildEmbeddings=true` will regenerate embeddings
+* The setup intentionally favors clarity over automation to make system behavior easy to inspect
+
+### Common commands
+
+```bash
+# Install dependencies
+pnpm install
+
+# Start web app only
+pnpm --filter web dev
+
+# Initialize database
+cd apps/web && npx prisma db push && npx prisma generate
+
+# Start calorie estimator
+cd apps/calorie-estimator-api
+./setup.sh
+uvicorn app.main:app --reload --port 8001
+```
+## License
+
+This project is licensed under the MIT License.
+See the LICENSE file for details.
