@@ -9,8 +9,9 @@ BlueWell is a compact, production-oriented application built to explore how mode
 The project combines LLM-based planning, embeddings-driven retrieval, and image-based calorie estimation within a reproducible and deployed codebase.
 
 The emphasis is not on model novelty, but on orchestration, grounding, and practical accuracy—areas that often determine whether AI systems remain usable outside of controlled settings.
-
-![Welcome](img/welcome.png)
+<p align="center">
+  <img src="img/welcome.png" alt="Plan page" width="700" />
+</p>
 
 ## Why this project exists
 
@@ -55,9 +56,13 @@ Representative planner tools include:
 * `list_rec_classes` — selection of relevant fitness classes
 * `compose_timeline` — scheduling activities into available time slots
 
+<p align="center">
+  <img src="img/home2.png" alt="Plan page" width="700" />
+</p>
 
-![Home](img/home2.png)
-![Plan](img/plan.png)
+<p align="center">
+  <img src="img/home2.png" alt="Plan page" width="700" />
+</p>
 
 ### User context and goal modeling
 
@@ -71,7 +76,10 @@ Calorie targets are derived programmatically using standard metabolic calculatio
 
 Daily summaries track calorie intake, protein consumption, and progress toward personalized goals.
 
-![Survey](img/survey.png)
+
+<p align="center">
+  <img src="img/survey.png" alt="Plan page" width="700" />
+</p>
 
 ### Retrieval via embeddings
 
@@ -88,14 +96,19 @@ To reduce portion-size error, the system uses **known box dimensions** as a phys
 
 This reflects a broader design choice throughout the project: compensating for model limitations through system-level constraints rather than increased model complexity.
  
-![Cal esimation](img/log1.png)
+<p align="center">
+  <img src="img/log1.png" alt="Log page" width="700" />
+</p>
 
 ### Meal logging and aggregation
 
 Meals are logged and aggregated per day to support summaries and future analysis.
 State is cached incrementally to keep data flows explicit and to reduce recomputation.
 
-![Logging](img/log.png)
+
+<p align="center">
+  <img src="img/log.png" alt="Log page" width="700" />
+</p>
 
 Perfect — these fit naturally, they just need to be placed **once**, in the right layer, without turning the README back into a feature dump.
 
@@ -114,7 +127,9 @@ The assistant supports:
 
 Rather than acting as a separate chatbot, the assistant shares the same tools and grounding logic as the planner, ensuring consistent behavior across interaction modes.
 
-![Chatbot](img/chatbot.png)
+<p align="center">
+  <img src="img/chatbot.png" alt="Chatbot page" width="700" />
+</p>
 
 ## Demo
 A short walkthrough demonstrating planner behavior, retrieval grounding, and deployed inference.
