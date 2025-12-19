@@ -223,6 +223,7 @@ export default function HomePage() {
 
   const timelineEvents: TimelineEvent[] = useMemo(() => {
     if (!plan) return [];
+    const colors: Array<"blue" | "green" | "purple" | "orange"> = ["blue", "green", "purple"];
     return plan.workouts
       .filter((workout) => Boolean(workout.start_time))
       .slice(0, 3)
@@ -230,7 +231,7 @@ export default function HomePage() {
         id: workout.id,
         label: workout.title,
         time: workout.start_time ? formatTime(workout.start_time) : "",
-        color: ["blue", "green", "purple"][index % 3],
+        color: colors[index % 3],
       }));
   }, [plan]);
 
@@ -281,7 +282,7 @@ export default function HomePage() {
         <Card className="border-0 shadow-soft">
           <CardContent className="p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-neutral-dark">Today's Meals</h2>
+              <h2 className="text-lg font-semibold text-neutral-dark">Today&apos;s Meals</h2>
               <Button
                 variant="ghost"
                 size="sm"

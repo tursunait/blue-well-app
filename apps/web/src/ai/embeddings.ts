@@ -78,7 +78,7 @@ export async function embedMenuItems(itemIds?: string[]): Promise<number> {
         {
           retries: 3,
           onFailedAttempt: (error) => {
-            console.warn(`Embedding attempt ${error.attemptNumber} failed:`, error.message);
+            console.warn(`Embedding attempt ${error.attemptNumber} failed:`, (error as any).message || error);
           },
         }
       );

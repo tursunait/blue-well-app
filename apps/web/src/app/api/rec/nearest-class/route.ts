@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "../../auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth-config";
 import { getUserId, getDevUser } from "@/lib/auth-dev";
 import { getAvailableFitnessClasses, getUserFitnessPreferences } from "@/ai/fallback-plan-ai";
 

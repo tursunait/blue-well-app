@@ -78,7 +78,7 @@ export async function generatePlanForWindow(opts: {
   const userContext = await getUserContext(userId);
   
   // Get user's fitness preferences for class filtering
-  const fitnessPrefs = await getUserFitnessPreferences(userId).catch(() => ({}));
+  const fitnessPrefs = await getUserFitnessPreferences(userId).catch(() => ({} as Awaited<ReturnType<typeof getUserFitnessPreferences>>));
   const preferredTimes = fitnessPrefs.preferredTimes || [];
   const sportsClasses = fitnessPrefs.sportsClasses || [];
   
@@ -247,7 +247,7 @@ Generate a practical plan with specific meal recommendations and workout suggest
   const toolCalls = finalResponse.tool_calls || [];
   
   for (const toolCall of toolCalls) {
-    if (toolCall.function.name === "search_menu") {
+    if (toolCall.type === "function" && "function" in toolCall && toolCall.function.name === "search_menu") {
       const args = JSON.parse(toolCall.function.arguments);
       console.log(`[planner] search_menu called with:`, args);
       const results = await searchMenuItems(args);
@@ -262,7 +262,7 @@ Generate a practical plan with specific meal recommendations and workout suggest
         tool_call_id: toolCall.id,
         content: JSON.stringify(results),
       });
-    } else if (toolCall.function.name === "list_rec_classes") {
+    } else if (toolCall.type === "function" && "function" in toolCall && toolCall.function.name === "list_rec_classes") {
       const args = JSON.parse(toolCall.function.arguments);
       
       // Use CSV classes with preference filtering instead of database

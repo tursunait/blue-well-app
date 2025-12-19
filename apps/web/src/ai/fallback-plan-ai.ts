@@ -100,7 +100,7 @@ export async function getAvailableFitnessClasses(
     }
     
     // Convert to format expected by planner
-    return csvClasses.map((cls) => {
+    let convertedClasses = csvClasses.map((cls) => {
       // Parse date and time
       let startTime: Date | null = null;
       let endTime: Date | null = null;
@@ -169,7 +169,7 @@ export async function getAvailableFitnessClasses(
         id: `csv-${cls.date}-${cls.title}-${cls.startTime}`,
         title: cls.title,
         startTime: startTime.toISOString(),
-        endTime: endTime.toISOString(),
+        endTime: (endTime || startTime).toISOString(),
         location: cls.location || "Duke Rec",
         intensity,
         source: "DUKE_REC" as const,
@@ -180,8 +180,8 @@ export async function getAvailableFitnessClasses(
     });
     
     // Filter by sports preferences if specified
-    let finalClasses = csvClasses;
-    if (sportsClasses && sportsClasses.length > 0) {
+    let finalClasses = convertedClasses;
+    if (sportsClasses?.length) {
       const beforeFilter = finalClasses.length;
       finalClasses = finalClasses.filter((cls) => cls.matchesPreference);
       console.log(`[getAvailableFitnessClasses] After sports filter (${sportsClasses.join(', ')}): ${beforeFilter} → ${finalClasses.length}`);

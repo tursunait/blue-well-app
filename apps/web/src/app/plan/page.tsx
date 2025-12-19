@@ -200,7 +200,7 @@ const PlanPage: React.FC = () => {
         {stats && (
           <Card className="border-0 shadow-soft">
             <CardContent className="p-6 space-y-4">
-              <h2 className="text-lg font-semibold text-neutral-dark">Today's Progress</h2>
+              <h2 className="text-lg font-semibold text-neutral-dark">Today&apos;s Progress</h2>
               <div className="grid grid-cols-3 gap-3">
                 <div className="p-3 rounded-xl bg-bluewell-light/10 border border-bluewell-light/20 text-center">
                   <div className="text-xs text-neutral-muted mb-1">Calories</div>
@@ -251,7 +251,7 @@ const PlanPage: React.FC = () => {
           <Card className="border-0 shadow-soft">
             <CardContent className="p-6 space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-neutral-dark">Today's Plan</h2>
+                <h2 className="text-lg font-semibold text-neutral-dark">Today&apos;s Plan</h2>
                 <Button
                   variant="ghost"
                   size="sm"

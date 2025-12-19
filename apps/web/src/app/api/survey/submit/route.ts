@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "../../auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth-config";
 import { prisma } from "@/lib/prisma";
-import { FitnessGoal } from "@prisma/client";
 
 // Mifflin-St Jeor BMR calculation
 function calculateBMR(weightKg: number, heightCm: number, age: number, gender: string): number {
@@ -20,15 +19,15 @@ function calculateTDEE(bmr: number, weeklyActivity: number): number {
 }
 
 // Adjust TDEE by fitness goal
-function adjustByGoal(tdee: number, goal: FitnessGoal): number {
+function adjustByGoal(tdee: number, goal: string): number {
   switch (goal) {
-    case FitnessGoal.LOSE_FAT:
+    case "LOSE_FAT":
       return tdee - 250;
-    case FitnessGoal.GAIN_MUSCLE:
-    case FitnessGoal.FITNESS:
-    case FitnessGoal.ATHLETIC:
+    case "GAIN_MUSCLE":
+    case "FITNESS":
+    case "ATHLETIC":
       return tdee + 200;
-    case FitnessGoal.MAINTAIN:
+    case "MAINTAIN":
     default:
       return tdee;
   }
@@ -76,17 +75,17 @@ export async function POST(request: NextRequest) {
       sportsClasses,
     } = body;
     
-    // Map fitness goal string to enum
-    const goalMap: Record<string, FitnessGoal> = {
-      "Lose weight": FitnessGoal.LOSE_FAT,
-      "Build muscle": FitnessGoal.GAIN_MUSCLE,
-      "Improve endurance": FitnessGoal.ATHLETIC,
-      "Maintain current shape": FitnessGoal.MAINTAIN,
-      "Improve overall fitness": FitnessGoal.FITNESS,
-      "Not sure yet": FitnessGoal.UNKNOWN,
+    // Map fitness goal string to string value
+    const goalMap: Record<string, string> = {
+      "Lose weight": "LOSE_FAT",
+      "Build muscle": "GAIN_MUSCLE",
+      "Improve endurance": "ATHLETIC",
+      "Maintain current shape": "MAINTAIN",
+      "Improve overall fitness": "FITNESS",
+      "Not sure yet": "UNKNOWN",
     };
     
-    const fitnessGoalEnum = fitnessGoal ? goalMap[fitnessGoal] || FitnessGoal.UNKNOWN : FitnessGoal.UNKNOWN;
+    const fitnessGoalEnum = fitnessGoal ? goalMap[fitnessGoal] || "UNKNOWN" : "UNKNOWN";
     
     // Update user profile
     const updatedUser = await prisma.user.update({
@@ -152,7 +151,7 @@ export async function POST(request: NextRequest) {
         updatedUser.gender
       );
       const tdee = calculateTDEE(bmr, updatedUser.weeklyActivity || 2);
-      calorieBudget = Math.round(adjustByGoal(tdee, updatedUser.fitnessGoal || FitnessGoal.MAINTAIN));
+      calorieBudget = Math.round(adjustByGoal(tdee, updatedUser.fitnessGoal || "MAINTAIN"));
       
       // Protein target: 1.2 g/kg (configurable)
       const proteinPerKg = parseFloat(process.env.DEFAULT_PROTEIN_PER_KG || "1.2");

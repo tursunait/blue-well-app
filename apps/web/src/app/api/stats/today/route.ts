@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "../../auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth-config";
 import { prisma } from "@/lib/prisma";
 import { getUserId, getDevUser } from "@/lib/auth-dev";
 import { calculateDailyTargets } from "@/lib/targets";
@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
         ...stats,
         dietPrefs,
       });
-      insights = insightsResult;
+      insights = insightsResult as Record<string, unknown>;
       aiInsightsFallback = insightsResult.aiInsightsFallback ?? false;
     } catch (error: any) {
       const is429 = error?.status === 429 || error?.code === "insufficient_quota";

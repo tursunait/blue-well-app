@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "../../auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth-config";
 import { prisma } from "@/lib/prisma";
 import { getUserId } from "@/lib/auth-dev";
 import { getUserContext } from "@/ai/planner-tools";
@@ -61,8 +61,8 @@ export async function GET() {
     const defaultContext = {
       calorieBudget: plannerContext?.calorieBudget ?? 2000,
       proteinTarget: plannerContext?.proteinTarget ?? 120,
-      timeBudgetMin: plannerContext?.timeBudgetMin ?? user.timeBudgetMin ?? profile?.timeBudgetMin ?? 20,
-      weeklyActivity: plannerContext?.weeklyActivity ?? user.weeklyActivity ?? 2,
+      timeBudgetMin: plannerContext?.timeBudgetMin ?? 20,
+      weeklyActivity: plannerContext?.weeklyActivity ?? (profile?.weeklyWorkouts ?? 2),
     };
     const persona = {
       userId,
@@ -76,8 +76,8 @@ export async function GET() {
       allergies: parseJsonArray(profile?.allergies),
       timePrefs: parseJsonArray(profile?.timePrefs),
       reminderPref: user.reminderPref || null,
-      scheduleCons: user.scheduleCons ?? profile?.scheduleCons ?? null,
-      mealRegular: user.mealRegular ?? profile?.mealRegular ?? null,
+      scheduleCons: user.scheduleCons ?? null,
+      mealRegular: user.mealRegular ?? null,
       timeBudgetMin: defaultContext.timeBudgetMin,
       weeklyActivity: defaultContext.weeklyActivity,
       calorieBudget: defaultContext.calorieBudget,

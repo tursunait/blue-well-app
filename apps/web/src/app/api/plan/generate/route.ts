@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import OpenAI from "openai";
 
-import { authOptions } from "../../auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth-config";
 import { prisma } from "@/lib/prisma";
 import { calculateDailyTargets } from "@/lib/targets";
 import { groundMeals, groundWorkouts } from "@/lib/grounding";

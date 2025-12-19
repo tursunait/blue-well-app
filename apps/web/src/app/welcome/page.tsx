@@ -44,7 +44,7 @@ export default function WelcomePage() {
         {/* Greeting and Message */}
         <div className="space-y-3">
           <h2 className="text-4xl font-semibold text-neutral-dark leading-tight">
-            Let's personalize your wellness plan.
+            Let&apos;s personalize your wellness plan.
           </h2>
         </div>
 

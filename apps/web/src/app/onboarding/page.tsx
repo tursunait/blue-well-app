@@ -364,9 +364,9 @@ export default function OnboardingPage() {
                 priority
               />
             </div>
-            <h1 className="text-3xl font-semibold text-neutral-dark">You're all set.</h1>
+            <h1 className="text-3xl font-semibold text-neutral-dark">You&apos;re all set.</h1>
             <p className="text-base text-neutral-text leading-relaxed">
-              We'll tailor simple steps that fit your schedule.
+              We&apos;ll tailor simple steps that fit your schedule.
             </p>
             <div className="pt-4">
               <Button 

@@ -12,6 +12,7 @@ coverage/
 out/
 build/
 dist/
+*.tsbuildinfo
 
 # Production
 *.local
@@ -34,6 +35,8 @@ pnpm-debug.log*
 .idea/
 *.swp
 *.swo
+*.sublime-project
+*.sublime-workspace
 
 # Python
 __pycache__/
@@ -49,21 +52,15 @@ ENV/
 # Prisma
 prisma/migrations/
 
-# Uploads
+# Uploads & Media
 uploads/
+public/uploads/
 *.jpg
 *.jpeg
 *.png
 *.gif
 
-# env files
-*.env
-*.env.*
-!.env.example
-apps/web/.env.local
-apps/web/.env.local.*
-apps/web/.env*
-# env files
+# Environment files
 *.env
 *.env.*
 !.env.example
@@ -71,3 +68,45 @@ apps/web/.env.local
 apps/web/.env.local.*
 apps/web/.env*
 
+# Local development files
+1conda
+.conda
+conda/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Build cache
+.eslintcache
+.prettier-cache
+.cache/
+
+# Generated files to exclude from portfolio display
+.eslintrc.json
+turbo.json
+package.json
+.prettierrc
+pnpm-workspace.yaml
+pnpm-lock.yaml
+
+# Data files (sensitive/large)
+data/Data.csv
+data/duke_rec_schedule.csv
+calorie-estimator-api/data/calorie_estimations.jsonl
+
+# macOS
+.AppleDouble
+.LSOverride
+*.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
