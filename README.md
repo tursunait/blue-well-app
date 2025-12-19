@@ -10,7 +10,7 @@ The project combines LLM-based planning, embeddings-driven retrieval, and image-
 
 The emphasis is not on model novelty, but on orchestration, grounding, and practical accuracy—areas that often determine whether AI systems remain usable outside of controlled settings.
 <p align="center">
-  <img src="img/welcome.png" alt="Plan page" width="700" />
+  <img src="img/welcome.png" alt="Plan page" width="500" />
 </p>
 
 ## Why this project exists
@@ -57,11 +57,11 @@ Representative planner tools include:
 * `compose_timeline` — scheduling activities into available time slots
 
 <p align="center">
-  <img src="img/home2.png" alt="Plan page" width="700" />
+  <img src="img/home2.png" alt="Plan page" width="500" />
 </p>
 
 <p align="center">
-  <img src="img/home2.png" alt="Plan page" width="700" />
+  <img src="img/home2.png" alt="Plan page" width="500" />
 </p>
 
 ### User context and goal modeling
@@ -78,7 +78,7 @@ Daily summaries track calorie intake, protein consumption, and progress toward p
 
 
 <p align="center">
-  <img src="img/survey.png" alt="Plan page" width="700" />
+  <img src="img/survey.png" alt="Plan page" width="500" />
 </p>
 
 ### Retrieval via embeddings
@@ -97,7 +97,7 @@ To reduce portion-size error, the system uses **known box dimensions** as a phys
 This reflects a broader design choice throughout the project: compensating for model limitations through system-level constraints rather than increased model complexity.
  
 <p align="center">
-  <img src="img/log1.png" alt="Log page" width="700" />
+  <img src="img/log1.png" alt="Log page" width="500" />
 </p>
 
 ### Meal logging and aggregation
@@ -107,7 +107,7 @@ State is cached incrementally to keep data flows explicit and to reduce recomput
 
 
 <p align="center">
-  <img src="img/log.png" alt="Log page" width="700" />
+  <img src="img/log.png" alt="Log page" width="500" />
 </p>
 
 Perfect — these fit naturally, they just need to be placed **once**, in the right layer, without turning the README back into a feature dump.
@@ -128,7 +128,7 @@ The assistant supports:
 Rather than acting as a separate chatbot, the assistant shares the same tools and grounding logic as the planner, ensuring consistent behavior across interaction modes.
 
 <p align="center">
-  <img src="img/chatbot.png" alt="Chatbot page" width="700" />
+  <img src="img/chatbot.png" alt="Chatbot page" width="500" />
 </p>
 
 ## Demo
