@@ -10,6 +10,8 @@ The project combines LLM-based planning, embeddings-driven retrieval, and image-
 
 The emphasis is not on model novelty, but on orchestration, grounding, and practical accuracy—areas that often determine whether AI systems remain usable outside of controlled settings.
 
+![Welcome](img/welcome.png)
+
 ## Why this project exists
 
 BlueWell was developed to study how AI can be integrated into a user-facing product under realistic constraints such as latency, cost, imperfect inputs, and operational deployment.
@@ -53,7 +55,7 @@ Representative planner tools include:
 * `list_rec_classes` — selection of relevant fitness classes
 * `compose_timeline` — scheduling activities into available time slots
 
-![Home](img/home.png)
+
 ![Home](img/home2.png)
 ![Plan](img/plan.png)
 
@@ -113,6 +115,12 @@ The assistant supports:
 Rather than acting as a separate chatbot, the assistant shares the same tools and grounding logic as the planner, ensuring consistent behavior across interaction modes.
 
 ![Chatbot](img/chatbot.png)
+
+## Demo
+A short walkthrough demonstrating planner behavior, retrieval grounding, and deployed inference.
+
+[Demo walkthough](https://github.com/tursunait/blue-well-app/img/demo.MP4)
+
 
 ## Technology & Implementation
 

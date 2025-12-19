@@ -57,7 +57,6 @@ uploads/
 public/uploads/
 *.jpg
 *.jpeg
-*.png
 *.gif
 
 # Environment files
