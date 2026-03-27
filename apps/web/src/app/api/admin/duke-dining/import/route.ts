@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { importDukeDining } from "@/etl/dukeDining";
+import { importDukeDiningExcel } from "@/etl/dukeDiningExcel";
 
 export async function POST(request: NextRequest) {
   // Check admin token
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const rebuildEmbeddings = body.rebuildEmbeddings === true;
     
-    const result = await importDukeDining();
+    const result = await importDukeDiningExcel();
     
     // If rebuildEmbeddings is true, regenerate all embeddings
     if (rebuildEmbeddings) {

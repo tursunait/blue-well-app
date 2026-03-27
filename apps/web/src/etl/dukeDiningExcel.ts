@@ -23,14 +23,14 @@ interface ParsedRow {
 const HEADER_SYNONYMS: Record<string, string[]> = {
   vendor: ["vendor", "restaurant", "dining hall", "location", "venue"],
   campusLoc: ["campus location", "venue", "court", "location"],
-  name: ["item", "menu item", "food", "dish", "product"],
-  description: ["description", "notes"],
+  name: ["item", "menu item", "food", "dish", "product", "item name"],
+  description: ["description", "notes", "category"],
   calories: ["calories", "kcal"],
-  proteinG: ["protein", "protein(g)", "protein g"],
-  carbsG: ["carbs", "carbohydrates", "carbs(g)", "carbs g"],
-  fatG: ["fat", "fat(g)", "fat g"],
+  proteinG: ["protein", "protein(g)", "protein g", "protein (g)"],
+  carbsG: ["carbs", "carbohydrates", "carbs(g)", "carbs g", "total carbs", "total carbs (g)"],
+  fatG: ["fat", "fat(g)", "fat g", "total fat", "total fat (g)"],
   priceUSD: ["price", "price($)", "price $", "cost"],
-  tags: ["tags", "diet", "attributes", "notes"],
+  tags: ["tags", "diet", "attributes", "notes", "allergens"],
   updatedAt: ["updated", "last updated"],
 };
 
@@ -109,6 +109,15 @@ function parseCSV(csvText: string): ParsedRow[] {
     }
   }
   
+  // Also find Category column index (common in Duke Dining CSV)
+  let categoryIndex = -1;
+  for (let i = 0; i < headerValues.length; i++) {
+    if (headerValues[i].toLowerCase().includes("category")) {
+      categoryIndex = i;
+      break;
+    }
+  }
+  
   // Validate required fields
   if (headers.vendor === undefined || headers.name === undefined) {
     console.warn("CSV missing required fields (vendor, name), skipping");
@@ -135,8 +144,14 @@ function parseCSV(csvText: string): ParsedRow[] {
       parsed.campusLoc = (values[headers.campusLoc] || "").trim() || undefined;
     }
     
+    // Use description field if available, otherwise use Category
     if (headers.description !== undefined) {
       parsed.description = (values[headers.description] || "").trim() || undefined;
+    }
+    
+    // If no description but Category exists, use Category
+    if (!parsed.description && categoryIndex >= 0 && values[categoryIndex]) {
+      parsed.description = (values[categoryIndex] || "").trim() || undefined;
     }
     
     if (headers.calories !== undefined) {
@@ -376,21 +391,34 @@ export async function importDukeDiningExcel(
   
   // Upsert vendors and items
   for (const [vendorName, rows] of vendorMap.entries()) {
-    // Upsert vendor
-    const vendor = await prisma.menuVendor.upsert({
-      where: { name: vendorName },
-      update: {
+    // Find or create vendor (name is not unique, so we search first)
+    let vendor = await prisma.menuVendor.findFirst({
+      where: {
+        name: vendorName,
         source: "DUKE_DINING",
-        campusLoc: rows[0]?.campusLoc,
       },
-      create: {
+    });
+
+    if (!vendor) {
+      vendor = await prisma.menuVendor.create({
+        data: {
         name: vendorName,
         source: "DUKE_DINING",
         campusLoc: rows[0]?.campusLoc,
       },
     });
-    
+      vendorsUpserted++;
+    } else {
+      // Update if needed
+      vendor = await prisma.menuVendor.update({
+        where: { id: vendor.id },
+        data: {
+          source: "DUKE_DINING",
+          campusLoc: rows[0]?.campusLoc || vendor.campusLoc,
+        },
+      });
     vendorsUpserted++;
+    }
     
     // Upsert items
     for (const row of rows) {
@@ -461,10 +489,20 @@ export async function importDukeDiningExcel(
     }
   }
   
-  // Generate embeddings for new/updated items
+  // Generate embeddings for new/updated items (optional - skip if OpenAI quota exceeded)
   let embedded = 0;
-  if (itemIdsToEmbed.length > 0) {
+  if (itemIdsToEmbed.length > 0 && process.env.OPENAI_API_KEY) {
+    try {
     embedded = await embedMenuItems(itemIdsToEmbed);
+    } catch (error: any) {
+      const is429 = error?.status === 429 || error?.code === "insufficient_quota";
+      if (is429) {
+        console.warn(`[import] Skipping embeddings due to OpenAI quota. ${itemIdsToEmbed.length} items imported without embeddings.`);
+      } else {
+        console.warn(`[import] Failed to generate embeddings:`, error.message);
+      }
+      // Continue without embeddings - items are still imported
+    }
   }
   
   // Clean up temporary file if we downloaded it from GitHub

@@ -15,11 +15,16 @@ export default function WelcomePage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-neutral-bg p-6">
       <div className="w-full max-w-md space-y-12 text-center">
-        {/* Header */}
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold text-neutral-dark">
-            Welcome Screen
-          </h1>
+        {/* Logo Headline */}
+        <div className="flex justify-center">
+          <Image
+            src="/img/logo_headline.png"
+            alt="BlueWell"
+            width={240}
+            height={80}
+            className="object-contain"
+            priority
+          />
         </div>
 
         {/* Circular Illustration */}
@@ -39,7 +44,7 @@ export default function WelcomePage() {
         {/* Greeting and Message */}
         <div className="space-y-3">
           <h2 className="text-4xl font-semibold text-neutral-dark leading-tight">
-            Let's personalize your wellness plan.
+            Let&apos;s personalize your wellness plan.
           </h2>
         </div>
 

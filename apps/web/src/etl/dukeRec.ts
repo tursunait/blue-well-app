@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+// @ts-ignore
 import ical from "ical";
 
 interface FitnessClassInput {

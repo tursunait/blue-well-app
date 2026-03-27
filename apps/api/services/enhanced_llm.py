@@ -1,10 +1,66 @@
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
+import os
+import json
+import logging
 import re
+
+from openai import OpenAI
+
+logger = logging.getLogger(__name__)
+
+SYSTEM_PROMPT = """
+You are BlueWell's AI wellness coach. Provide empathetic, practical guidance rooted in the user's personal goals and survey data. Assume messages might contain typos or missing words—infer the intended meaning when it is safe to do so.
+Always acknowledge relevant profile facts (goal, diet preferences, time availability, activity patterns) when answering.
+Respond in JSON with this shape:
+{
+  "type": "message" | "suggestions",
+  "message": "concise response (<=3 sentences, no medical advice)",
+  "suggestions": [
+    {
+      "id": "string identifier",
+      "kind": "workout" | "meal" | "class",
+      "title": "short actionable title",
+      "desc": "why it helps relative to the user's goals/preferences",
+      "cta": "Add to Calendar | Log Meal | Reserve Spot | Try This",
+      "payload": {
+        "startISO": "ISO datetime if scheduling",
+        "endISO": "ISO datetime if scheduling",
+        "kcal": number,
+        "protein": number,
+        "...": "any helpful structured data"
+      }
+    }
+  ]
+}
+Rules:
+- Keep tone encouraging, never clinical, and avoid medical diagnoses.
+- Mention how advice ties back to the user's stated goals or survey answers.
+- Avoid repeating the same template twice in a row—ground every suggestion in the persona (goal, diet, time budget, schedule consistency).
+- Suggest at most three concrete actions; omit suggestions when a message is enough.
+- When describing workouts, list concrete exercises with sets/reps (e.g., "Squats 3x10, Push-ups 3x12").
+- When you lack the info to answer, say so plainly and list topics you can help with (workouts, meals, Duke classes, planning, progress).
+- If `dukeRecClasses` context is provided, share the top matching classes with titles, start times, and locations before suggesting other actions.
+- If you reference scheduling, include ISO timestamps so the app can add items to the calendar.
+- Use ISO 8601 datetimes whenever providing times.
+- If information is missing, state that gently instead of guessing.
+""".strip()
+
+MAX_CHAT_HISTORY = 6
 
 
 class EnhancedLLMProvider:
     """Enhanced LLM provider with natural language understanding and personalized responses"""
+
+    def __init__(self) -> None:
+        self.model = os.getenv("CHATBOT_MODEL", "gpt-4o-mini")
+        api_key = os.getenv("OPENAI_API_KEY")
+        self.client: Optional[OpenAI] = None
+        if api_key:
+            try:
+                self.client = OpenAI(api_key=api_key)
+            except Exception as exc:  # pragma: no cover - defensive log
+                logger.warning("Failed to initialize OpenAI client: %s", exc)
 
     def generate(
         self,
@@ -19,10 +75,329 @@ class EnhancedLLMProvider:
         # Analyze conversation history for context
         recent_context = self._analyze_conversation_history(conversation_history or [])
         
+        # Try LLM-backed response first
+        llm_response = self._call_llm(
+            message=message,
+            user_profile=user_profile or {},
+            conversation_history=conversation_history or [],
+            extra_context=context or {},
+            recent_context=recent_context,
+        )
+        if llm_response:
+            return llm_response
+        
         # Natural language understanding - handle questions and requests
         response = self._understand_intent(message_lower, user_profile, recent_context)
         
         return response
+
+    def _call_llm(
+        self,
+        message: str,
+        user_profile: Dict[str, Any],
+        conversation_history: List[Dict[str, str]],
+        extra_context: Dict[str, Any],
+        recent_context: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        """Call OpenAI to craft a personalized response. Returns None if unavailable."""
+        if not self.client:
+            return None
+
+        messages: List[Dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+        for turn in (conversation_history or [])[-MAX_CHAT_HISTORY:]:
+            role = turn.get("role")
+            content = turn.get("content")
+            if role in {"user", "assistant"} and content:
+                messages.append({"role": role, "content": content})
+
+        user_prompt = self._build_user_prompt(message, user_profile, extra_context, recent_context)
+        messages.append({"role": "user", "content": user_prompt})
+
+        try:
+            completion = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.35,
+                max_tokens=700,
+                response_format={"type": "json_object"},
+            )
+            content = completion.choices[0].message.content if completion.choices else None
+            if not content:
+                return None
+            payload = json.loads(content)
+            return self._normalize_llm_payload(payload, user_profile)
+        except Exception as exc:  # pragma: no cover - network/service errors
+            logger.warning("LLM chat failed, falling back to rule-based response: %s", exc)
+            return None
+
+    def _build_user_prompt(
+        self,
+        latest_message: str,
+        user_profile: Dict[str, Any],
+        extra_context: Dict[str, Any],
+        recent_context: Dict[str, Any],
+    ) -> str:
+        """Compose the user-visible prompt for the LLM."""
+        profile_summary = self._format_user_profile(user_profile)
+        trimmed_context = None
+        if extra_context:
+            trimmed_context = {
+                k: v
+                for k, v in extra_context.items()
+                if k not in {"targets", "surveyAnswers", "dukeRecClasses"}
+            }
+        targets_summary = self._format_targets(extra_context)
+        survey_summary = self._summarize_survey_answers(extra_context)
+        classes_summary = self._summarize_duke_classes(extra_context)
+        remaining_context = self._format_context(trimmed_context)
+        topics = ", ".join(sorted(set(recent_context.get("topics", [])))) or "none noted"
+
+        return (
+            f"Latest user question:\n{latest_message.strip()}\n\n"
+            f"User profile details (from onboarding/survey):\n{profile_summary}\n\n"
+            f"Daily targets & constraints:\n{targets_summary}\n\n"
+            f"Survey highlights:\n{survey_summary}\n\n"
+            f"Duke Rec data:\n{classes_summary}\n\n"
+            f"Other app context:\n{remaining_context}\n\n"
+            f"Recent conversation topics: {topics}\n\n"
+            "Craft a helpful response that explicitly references the user's goals or preferences when relevant. "
+            "Return JSON as instructed in the system prompt."
+        )
+
+    def _format_user_profile(self, profile: Dict[str, Any]) -> str:
+        """Turn the stored profile into readable bullet points for the prompt."""
+        if not profile:
+            return "No profile data provided."
+
+        def stringify(value: Any) -> str:
+            if isinstance(value, list):
+                return ", ".join(str(item) for item in value if item)
+            if isinstance(value, (int, float)):
+                return str(value)
+            return str(value) if value not in (None, "", "null") else ""
+
+        lines = []
+        mappings = {
+            "primaryGoal": "Primary goal",
+            "weeklyWorkouts": "Weekly workout target",
+            "dietPrefs": "Diet preferences",
+            "allergies": "Allergies",
+            "timePrefs": "Preferred workout times",
+            "reminderPref": "Reminder style",
+            "scheduleCons": "Schedule consistency score",
+            "mealRegular": "Meal regularity score",
+            "timeBudgetMin": "Time budget (minutes/day)",
+            "heightCm": "Height (cm)",
+            "weightKg": "Weight (kg)",
+            "gender": "Gender",
+            "age": "Age",
+            "weeklyActivity": "Weekly activity rating",
+            "calorieBudget": "Calorie budget",
+            "proteinTarget": "Protein target (g)",
+            "avoidFoods": "Foods to avoid",
+        }
+
+        for key, label in mappings.items():
+            value = profile.get(key)
+            text = stringify(value)
+            if text:
+                lines.append(f"- {label}: {text}")
+
+        return "\n".join(lines) if lines else "Profile present but missing key goal data."
+
+    def _format_context(self, context: Dict[str, Any]) -> str:
+        """Format auxiliary context for the prompt."""
+        if not context:
+            return "No extra context."
+
+        try:
+            return json.dumps(context, ensure_ascii=False)
+        except TypeError:
+            return str(context)
+
+    def _format_targets(self, context: Optional[Dict[str, Any]]) -> str:
+        if not context:
+            return "Not provided."
+        targets = context.get("targets")
+        if not isinstance(targets, dict):
+            return "Not provided."
+        calorie = targets.get("calorieBudget")
+        protein = targets.get("proteinTarget")
+        notes = []
+        if calorie:
+            notes.append(f"- Daily calorie target: {calorie} kcal")
+        if protein:
+            notes.append(f"- Daily protein target: {protein} g")
+        return "\n".join(notes) if notes else "Targets provided but values missing."
+
+    def _summarize_survey_answers(self, context: Optional[Dict[str, Any]]) -> str:
+        if not context:
+            return "No survey answers available."
+        answers = context.get("surveyAnswers")
+        if not isinstance(answers, list) or not answers:
+            return "No survey answers available."
+        highlights = []
+        for entry in answers[:6]:
+            label = entry.get("label") or entry.get("questionId")
+            answer = entry.get("answer")
+            text = ""
+            if isinstance(answer, list):
+                text = ", ".join(str(item) for item in answer if item)
+            elif isinstance(answer, dict):
+                text = ", ".join(f"{k}: {v}" for k, v in answer.items())
+            else:
+                text = str(answer)
+            if text:
+                highlights.append(f"- {label}: {text}")
+        return "\n".join(highlights) if highlights else "Survey answers captured but unparsable."
+
+    def _summarize_duke_classes(self, context: Optional[Dict[str, Any]]) -> str:
+        if not context:
+            return "No Duke Rec data provided."
+        data = context.get("dukeRecClasses")
+        if not isinstance(data, dict):
+            return "No Duke Rec data provided."
+        items = data.get("items")
+        if not isinstance(items, list) or not items:
+            return f"No Duke Rec classes returned for {data.get('timeframe', 'requested window')}."
+
+        summaries = []
+        for entry in items[:6]:
+            title = entry.get("title", "Class")
+            location = entry.get("location", "")
+            start_iso = entry.get("start") or entry.get("startISO")
+            try:
+                start_pretty = datetime.fromisoformat(start_iso).strftime("%a %I:%M %p") if start_iso else "TBA"
+            except Exception:
+                start_pretty = start_iso or "TBA"
+            spots = entry.get("spotsOpen")
+            descriptor = f"- {title} at {start_pretty}"
+            if location:
+                descriptor += f" ({location})"
+            if spots is not None:
+                descriptor += f" – {spots} spots left"
+            summaries.append(descriptor)
+
+        label = data.get("timeframe", "requested window")
+        return f"Classes for {label}:\n" + "\n".join(summaries)
+
+    def _normalize_llm_payload(self, payload: Dict[str, Any], user_profile: Dict[str, Any]) -> Dict[str, Any]:
+        """Ensure the LLM output matches the ChatResponse schema."""
+        chat_type = payload.get("type", "message")
+        message = payload.get("message") or "I'm here to help keep you on track today."
+        raw_suggestions = payload.get("suggestions")
+
+        suggestions: List[Dict[str, Any]] = []
+        if isinstance(raw_suggestions, list):
+            allowed_kinds = {"workout", "meal", "class"}
+            for idx, suggestion in enumerate(raw_suggestions, start=1):
+                if not isinstance(suggestion, dict):
+                    continue
+                kind = suggestion.get("kind", "workout")
+                if kind not in allowed_kinds:
+                    kind = "workout"
+                normalized = {
+                    "id": suggestion.get("id") or f"s{idx}",
+                    "kind": kind,
+                    "title": suggestion.get("title") or "Try This",
+                    "desc": suggestion.get("desc") or "",
+                    "cta": suggestion.get("cta") or "Learn More",
+                    "payload": suggestion.get("payload") or {},
+                }
+                suggestions.append(self._enrich_suggestion(normalized, user_profile))
+
+        if chat_type == "suggestions" and not suggestions:
+            chat_type = "message"
+
+        if suggestions:
+            message = self._compose_text_from_suggestions(message, suggestions)
+            suggestions = None
+            chat_type = "message"
+
+        return {
+            "type": chat_type,
+            "message": message,
+            "suggestions": suggestions or None,
+        }
+
+    def _enrich_suggestion(self, suggestion: Dict[str, Any], user_profile: Dict[str, Any]) -> Dict[str, Any]:
+        """Fill in missing payload data so UI actions always work."""
+        payload = suggestion.get("payload") or {}
+        kind = suggestion.get("kind")
+        now = datetime.now()
+
+        def preferred_start() -> datetime:
+            prefs = user_profile.get("timePrefs") or []
+            base = now
+            if prefs:
+                pref = prefs[0]
+                hour = {"morning": 7, "afternoon": 14, "evening": 18}.get(pref, now.hour)
+                return now.replace(hour=hour, minute=0, second=0, microsecond=0)
+            return now
+
+        if kind in {"workout", "class"}:
+            if "startISO" not in payload or "endISO" not in payload:
+                start = preferred_start()
+                duration = 45 if kind == "workout" else 60
+                payload.setdefault("startISO", start.isoformat())
+                payload.setdefault("endISO", (start + timedelta(minutes=duration)).isoformat())
+        if kind == "workout" and not suggestion.get("desc"):
+            suggestion["desc"] = self._build_workout_detail(user_profile)
+        elif kind == "meal":
+            payload.setdefault("kcal", 500)
+            payload.setdefault("protein", 30)
+
+        suggestion["payload"] = payload
+        return suggestion
+
+    def _build_workout_detail(self, user_profile: Dict[str, Any]) -> str:
+        goal = (user_profile.get("primaryGoal") or user_profile.get("fitnessGoal") or "fitness").lower()
+        time_budget = user_profile.get("timeBudgetMin") or 30
+        blocks = ["5-min brisk walk warm-up"]
+        if "strength" in goal or "muscle" in goal:
+            blocks.append("3x10 bodyweight squats")
+            blocks.append("3x12 push-ups or kneeling push-ups")
+        elif "lose" in goal or "fat" in goal:
+            blocks.append("10-min light jog or bike at RPE 5/10")
+            blocks.append("3x12 alternating lunges")
+        else:
+            blocks.append("3x12 glute bridges + 3x30s plank holds")
+        blocks.append("5-min full-body stretch")
+        return f"~{time_budget} min: " + "; ".join(blocks)
+
+    def _compose_text_from_suggestions(self, intro: str, suggestions: List[Dict[str, Any]]) -> str:
+        lines: List[str] = []
+        if intro.strip():
+            lines.append(intro.strip())
+        for suggestion in suggestions:
+            title = suggestion.get("title", suggestion.get("kind", "Suggestion").title())
+            desc = suggestion.get("desc", "")
+            payload = suggestion.get("payload") or {}
+            start_label = self._format_time_label(payload.get("startISO"))
+            detail_parts = []
+            if start_label != "any time today":
+                detail_parts.append(start_label)
+            if payload.get("location"):
+                detail_parts.append(payload["location"])
+            detail = " • ".join(detail_parts)
+            base = f"- {title}"
+            if detail:
+                base += f" ({detail})"
+            if desc:
+                base += f": {desc}"
+            lines.append(base)
+        lines.append("Need tweaks or a different option? Just let me know.")
+        return "\n".join(lines)
+
+    def _format_time_label(self, iso_str: Optional[str]) -> str:
+        if not iso_str:
+            return "any time today"
+        try:
+            dt = datetime.fromisoformat(iso_str)
+            return dt.strftime("%a %I:%M %p").lstrip("0")
+        except Exception:
+            return "any time today"
 
     def _analyze_conversation_history(self, history: List[Dict[str, str]]) -> Dict[str, Any]:
         """Extract context from conversation history"""
@@ -281,9 +656,10 @@ class EnhancedLLMProvider:
                 }
         
         # Default response for general questions
+        topics = ["workouts", "meals", "Duke Rec classes", "daily plans", "progress nudges"]
         return {
             "type": "message",
-            "message": "I'm here to help! You can ask me about workouts, meals, classes, or your daily plan. What would you like to know?",
+            "message": f"I may not have data for that yet, but I can help with {', '.join(topics)}. Which area should we focus on?",
         }
 
     def _generate_workout_suggestions(
@@ -451,4 +827,3 @@ class EnhancedLLMProvider:
         })
         
         return suggestions
-

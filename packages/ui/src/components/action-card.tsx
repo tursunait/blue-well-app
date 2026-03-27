@@ -27,9 +27,9 @@ export const ActionCard: React.FC<ActionCardProps> = ({
         <h4 className="text-base font-semibold text-neutral-dark mb-1">
           {suggestion.title}
         </h4>
-        {suggestion.description && (
+        {suggestion.desc && (
           <p className="text-sm text-neutral-text leading-relaxed">
-            {suggestion.description}
+            {suggestion.desc}
           </p>
         )}
       </CardContent>

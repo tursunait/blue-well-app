@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "../../auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth-config";
 import { prisma } from "@/lib/prisma";
 import { getUserId, getDevUser } from "@/lib/auth-dev";
 
@@ -37,9 +37,11 @@ export async function POST(req: NextRequest) {
       await prisma.surveyAnswer.create({
         data: {
           userId: userId,
-          surveyId,
           questionId,
-          answerJson,
+          value: answerJson ? JSON.stringify(answerJson) : "{}",
+          surveyId,
+          // Store the JSON as a string for SQLite compatibility
+          answerJson: answerJson ? JSON.stringify(answerJson) : null,
         },
       });
 

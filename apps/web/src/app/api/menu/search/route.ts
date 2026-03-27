@@ -77,11 +77,16 @@ export async function GET(request: NextRequest) {
         let score = 0;
         
         // Diet compliance (already filtered, but boost score)
-        if (dietPrefs.length > 0) {
-          const matchingPrefs = dietPrefs.filter((pref) =>
-            item.tags.some((tag) => tag.toLowerCase().includes(pref.toLowerCase()))
-          );
-          score += matchingPrefs.length * 10;
+        if (dietPrefs.length > 0 && item.tags) {
+          try {
+            const itemTags = JSON.parse(item.tags) as string[];
+            const matchingPrefs = dietPrefs.filter((pref) =>
+              itemTags.some((tag) => tag.toLowerCase().includes(pref.toLowerCase()))
+            );
+            score += matchingPrefs.length * 10;
+          } catch (e) {
+            // If tags aren't valid JSON, skip
+          }
         }
         
         // Semantic similarity (if query and embedding exist)

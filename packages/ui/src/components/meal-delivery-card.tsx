@@ -10,6 +10,7 @@ export interface MealDeliveryCardProps {
   restaurantName: string;
   mealName: string;
   deliveryService: "Grubhub" | "Uber Eats" | "DoorDash";
+  url?: string;
   onAccept?: () => void;
   onSkip?: () => void;
 }
@@ -19,6 +20,7 @@ export const MealDeliveryCard: React.FC<MealDeliveryCardProps> = ({
   restaurantName,
   mealName,
   deliveryService,
+  url,
   onAccept,
   onSkip,
 }) => {
@@ -38,7 +40,12 @@ export const MealDeliveryCard: React.FC<MealDeliveryCardProps> = ({
       </CardContent>
       <CardFooter className="flex gap-3 p-6 pt-0">
         <Button
-          onClick={onAccept}
+          onClick={() => {
+            if (url) {
+              window.open(url, "_blank", "noopener,noreferrer");
+            }
+            onAccept?.();
+          }}
           size="lg"
           className="flex-1 rounded-full bg-neutral-dark text-white hover:bg-neutral-dark/90"
         >

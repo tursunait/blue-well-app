@@ -29,7 +29,7 @@ export const MealPlanCard: React.FC<MealPlanCardProps> = ({
           <UtensilsCrossed className="h-5 w-5 text-neutral-muted flex-shrink-0 mt-0.5" />
           <div className="flex-1">
             <h3 className="text-base font-semibold text-neutral-dark leading-tight">
-              Grab healthy meal nearby
+              Order healthy meal nearby
             </h3>
             <div className="mt-3 space-y-2">
               <button
@@ -75,16 +75,18 @@ export const MealPlanCard: React.FC<MealPlanCardProps> = ({
           </div>
         </div>
       </CardContent>
-      <CardFooter className="flex gap-3 p-6 pt-0">
-        <Button
-          variant="ghost"
-          onClick={onSkip}
-          size="lg"
-          className="flex-1 rounded-full border border-neutral-border"
-        >
-          Skip
-        </Button>
-      </CardFooter>
+      {onSkip && (
+        <CardFooter className="flex gap-3 p-6 pt-0">
+          <Button
+            variant="ghost"
+            onClick={onSkip}
+            size="lg"
+            className="flex-1 rounded-full border border-neutral-border"
+          >
+            Skip
+          </Button>
+        </CardFooter>
+      )}
     </Card>
   );
 };

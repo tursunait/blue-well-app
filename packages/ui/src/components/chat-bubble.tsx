@@ -21,6 +21,24 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({
 }) => {
   const isUser = role === "user";
 
+  // Format ISO timestamps into a more readable, locale-aware string
+  const formattedTimestamp = (() => {
+    if (!timestamp) return null;
+    try {
+      const d = new Date(timestamp);
+      if (Number.isNaN(d.getTime())) return timestamp;
+      return new Intl.DateTimeFormat(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      }).format(d);
+    } catch (e) {
+      return timestamp;
+    }
+  })();
+
   return (
     <div className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}>
       <div className={cn("max-w-[85%] space-y-3", isUser ? "items-end" : "items-start")}>
@@ -45,8 +63,8 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({
             ))}
           </div>
         )}
-        {timestamp && (
-          <p className="text-xs text-neutral-muted px-1">{timestamp}</p>
+        {formattedTimestamp && (
+          <p className="text-xs text-neutral-muted px-1">{formattedTimestamp}</p>
         )}
       </div>
     </div>

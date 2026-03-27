@@ -35,9 +35,42 @@ export const MyRecClassCard: React.FC<MyRecClassCardProps> = ({
       </CardContent>
       <CardFooter className="flex gap-3 p-6 pt-0">
         <Button
-          onClick={onAccept}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log("[MyRecClassCard] Accept button clicked");
+            
+            // Open MyRec website in a new tab
+            const myRecUrl = "https://myrec.recreation.duke.edu/";
+            console.log("[MyRecClassCard] Opening URL:", myRecUrl);
+            
+            // Always try to open in a new tab
+            const newWindow = window.open(myRecUrl, "_blank", "noopener,noreferrer");
+            
+            if (!newWindow) {
+              // If window.open returns null, popup was blocked
+              console.warn("[MyRecClassCard] Popup blocked. Creating temporary link to open in new tab.");
+              // Create a temporary anchor element and click it (less likely to be blocked)
+              const link = document.createElement("a");
+              link.href = myRecUrl;
+              link.target = "_blank";
+              link.rel = "noopener noreferrer";
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            } else {
+              console.log("[MyRecClassCard] Successfully opened in new tab");
+            }
+            
+            // Call the onAccept callback if provided
+            if (onAccept) {
+              console.log("[MyRecClassCard] Calling onAccept callback");
+              onAccept();
+            }
+          }}
           size="lg"
           className="flex-1 rounded-full bg-neutral-dark text-white hover:bg-neutral-dark/90"
+          type="button"
         >
           Accept
         </Button>

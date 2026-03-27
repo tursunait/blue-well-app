@@ -1,69 +1,52 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode } from "react";
+import React, { createContext, useContext, useState } from "react";
 
-interface Meal {
+export interface LoggedMeal {
   id: string;
-  name: string;
+  name?: string;
+  itemName?: string;
   calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
+  protein?: number | null;
+  proteinG?: number | null;
+  carbs?: number | null;
+  carbsG?: number | null;
+  fat?: number | null;
+  fatG?: number | null;
   timestamp: Date;
 }
 
 interface NutritionContextType {
-  // Goals
-  caloriesGoal: number;
-  proteinGoal: number;
-
-  // Consumed amounts
-  caloriesConsumed: number;
-  proteinConsumed: number;
-
-  // Logged meals
-  loggedMeals: Meal[];
-
-  // Actions
-  addMeal: (meal: Omit<Meal, "id" | "timestamp">) => void;
-  setCaloriesGoal: (goal: number) => void;
-  setProteinGoal: (goal: number) => void;
+  loggedMeals: LoggedMeal[];
+  addMeal: (meal: Omit<LoggedMeal, "id" | "timestamp">) => void;
+  removeMeal: (id: string) => void;
+  clearMeals: () => void;
 }
 
 const NutritionContext = createContext<NutritionContextType | undefined>(undefined);
 
-export function NutritionProvider({ children }: { children: ReactNode }) {
-  const [caloriesGoal] = useState(1800);
-  const [proteinGoal] = useState(120);
-  const [caloriesConsumed, setCaloriesConsumed] = useState(0);
-  const [proteinConsumed, setProteinConsumed] = useState(0);
-  const [loggedMeals, setLoggedMeals] = useState<Meal[]>([]);
+export function NutritionProvider({ children }: { children: React.ReactNode }) {
+  const [loggedMeals, setLoggedMeals] = useState<LoggedMeal[]>([]);
 
-  const addMeal = (meal: Omit<Meal, "id" | "timestamp">) => {
-    const newMeal: Meal = {
+  const addMeal = (meal: Omit<LoggedMeal, "id" | "timestamp">) => {
+    const newMeal: LoggedMeal = {
       ...meal,
-      id: Date.now().toString(),
+      id: Math.random().toString(36).substr(2, 9),
       timestamp: new Date(),
     };
+    setLoggedMeals((prev) => [...prev, newMeal]);
+  };
 
-    setLoggedMeals((prev) => [newMeal, ...prev]);
-    setCaloriesConsumed((prev) => prev + meal.calories);
-    setProteinConsumed((prev) => prev + meal.protein);
+  const removeMeal = (id: string) => {
+    setLoggedMeals((prev) => prev.filter((meal) => meal.id !== id));
+  };
+
+  const clearMeals = () => {
+    setLoggedMeals([]);
   };
 
   return (
-    <NutritionContext.Provider
-      value={{
-        caloriesGoal,
-        proteinGoal,
-        caloriesConsumed,
-        proteinConsumed,
-        loggedMeals,
-        addMeal,
-        setCaloriesGoal: () => {},
-        setProteinGoal: () => {},
-      }}
-    >
+    <NutritionContext.Provider value={{ loggedMeals, addMeal, removeMeal, clearMeals }}>
       {children}
     </NutritionContext.Provider>
   );
@@ -71,7 +54,7 @@ export function NutritionProvider({ children }: { children: ReactNode }) {
 
 export function useNutrition() {
   const context = useContext(NutritionContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error("useNutrition must be used within a NutritionProvider");
   }
   return context;

@@ -15,6 +15,10 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "BlueWell - Wellness Made Simple",
   description: "A calm, minimal wellness assistant for extremely busy people",
+  icons: {
+    icon: "/img/logo_icon.png",
+    apple: "/img/logo_icon.png",
+  },
 };
 
 export default function RootLayout({
